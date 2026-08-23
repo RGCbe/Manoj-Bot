@@ -50,104 +50,104 @@ cColor(offset) => close[offset] > open[offset] ? 1 : close[offset] < open[offset
 //  Act once per closed bar
 // -----------------------------------------------------------------------------
 if barstate.isconfirmed
-    // (a) age every live zone against the just-closed bar (offset 0)
-    if array.size(zBox) > 0
-        for i = 0 to array.size(zBox) - 1
-            if array.get(zAlive, i)
-                isSup = array.get(zSup, i)
-                zt    = array.get(zTop, i)
-                zb    = array.get(zBot, i)
-                b     = array.get(zBox, i)
-                died  = isSup ? (low < zb - deathBuf) : (high > zt + deathBuf)
-                if died
-                    array.set(zAlive, i, false)
-                    box.set_right(b, bar_index)
-                    box.set_bgcolor(b, deadFill)
-                    box.set_border_color(b, deadBord)
-                    box.set_border_style(b, line.style_dotted)
-                else if extendRight
-                    box.set_right(b, bar_index + 1)
+	// (a) age every live zone against the just-closed bar (offset 0)
+	if array.size(zBox) > 0
+		for i = 0 to array.size(zBox) - 1
+			if array.get(zAlive, i)
+				isSup = array.get(zSup, i)
+				zt    = array.get(zTop, i)
+				zb    = array.get(zBot, i)
+				b     = array.get(zBox, i)
+				died  = isSup ? (low < zb - deathBuf) : (high > zt + deathBuf)
+				if died
+					array.set(zAlive, i, false)
+					box.set_right(b, bar_index)
+					box.set_bgcolor(b, deadFill)
+					box.set_border_color(b, deadBord)
+					box.set_border_style(b, line.style_dotted)
+				else if extendRight
+					box.set_right(b, bar_index + 1)
 
-    // (b) detect a formation completing on this bar (c3=0, c2=1, c1=2)
-    col1 = cColor(2)
-    col2 = cColor(1)
-    col3 = cColor(0)
+	// (b) detect a formation completing on this bar (c3=0, c2=1, c1=2)
+	col1 = cColor(2)
+	col2 = cColor(1)
+	col3 = cColor(0)
 
-    sign     = 0
-    nonDoji  = 0
-    conflict = false
-    if col1 != 0
-        nonDoji += 1
-        sign := col1
-    if col2 != 0
-        nonDoji += 1
-        if sign == 0
-            sign := col2
-        else if sign != col2
-            conflict := true
-    if col3 != 0
-        nonDoji += 1
-        if sign == 0
-            sign := col3
-        else if sign != col3
-            conflict := true
+	sign     = 0
+	nonDoji  = 0
+	conflict = false
+	if col1 != 0
+		nonDoji += 1
+		sign := col1
+	if col2 != 0
+		nonDoji += 1
+		if sign == 0
+			sign := col2
+		else if sign != col2
+			conflict := true
+	if col3 != 0
+		nonDoji += 1
+		if sign == 0
+			sign := col3
+		else if sign != col3
+			conflict := true
 
-    valid = not conflict and sign != 0 and (allowDoji or nonDoji == 3)
-    wEnd  = 2 + lookback
+	valid = not conflict and sign != 0 and (allowDoji or nonDoji == 3)
+	wEnd  = 2 + lookback
 
-    if valid and bar_index > wEnd
-        isGreen = sign == 1
-        breaks  = isGreen ? (high[1] > high[2] and high[0] > high[1]) : (low[1] < low[2] and low[0] < low[1])
-        if breaks
-            float top    = na
-            float bottom = na
-            int   extreme = 0          // offset of the lowest / highest candle
-            if isGreen
-                bottom := low[0]
-                top    := math.min(open[0], close[0])
-                for k = 0 to wEnd
-                    if low[k] < bottom
-                        bottom := low[k]
-                        extreme := k
-                    top := math.min(top, math.min(open[k], close[k]))
-            else
-                top    := high[0]
-                bottom := math.max(open[0], close[0])
-                for k = 0 to wEnd
-                    if high[k] > top
-                        top := high[k]
-                        extreme := k
-                    bottom := math.max(bottom, math.max(open[k], close[k]))
-            if top <= bottom
-                top := bottom + syminfo.mintick
+	if valid and bar_index > wEnd
+		isGreen = sign == 1
+		breaks  = isGreen ? (high[1] > high[2] and high[0] > high[1]) : (low[1] < low[2] and low[0] < low[1])
+		if breaks
+			float top    = na
+			float bottom = na
+			int   extreme = 0          // offset of the lowest / highest candle
+			if isGreen
+				bottom := low[0]
+				top    := math.min(open[0], close[0])
+				for k = 0 to wEnd
+					if low[k] < bottom
+						bottom := low[k]
+						extreme := k
+					top := math.min(top, math.min(open[k], close[k]))
+			else
+				top    := high[0]
+				bottom := math.max(open[0], close[0])
+				for k = 0 to wEnd
+					if high[k] > top
+						top := high[k]
+						extreme := k
+					bottom := math.max(bottom, math.max(open[k], close[k]))
+			if top <= bottom
+				top := bottom + syminfo.mintick
 
-            // skip if it overlaps a still-live zone of the same type
-            overlap = false
-            if array.size(zBox) > 0
-                for i = 0 to array.size(zBox) - 1
-                    if array.get(zAlive, i) and array.get(zSup, i) == isGreen and not (top < array.get(zBot, i) or bottom > array.get(zTop, i))
-                        overlap := true
+			// skip if it overlaps a still-live zone of the same type
+			overlap = false
+			if array.size(zBox) > 0
+				for i = 0 to array.size(zBox) - 1
+					if array.get(zAlive, i) and array.get(zSup, i) == isGreen and not (top < array.get(zBot, i) or bottom > array.get(zTop, i))
+						overlap := true
 
-            if not overlap
-                leftIdx  = bar_index - extreme   // box starts at the lowest/highest candle
-                rightIdx = extendRight ? bar_index + 1 : bar_index
-                fill = isGreen ? supFill : resFill
-                bord = isGreen ? supBord : resBord
-                b = box.new(leftIdx, top, rightIdx, bottom, border_color = bord, bgcolor = fill, border_width = 1)
-                array.push(zBox, b)
-                array.push(zSup, isGreen)
-                array.push(zTop, top)
-                array.push(zBot, bottom)
-                array.push(zAlive, true)
-                if array.size(zBox) > maxZones
-                    box.delete(array.shift(zBox))
-                    array.shift(zSup)
-                    array.shift(zTop)
-                    array.shift(zBot)
-                    array.shift(zAlive)
+			if not overlap
+				leftIdx  = bar_index - extreme   // box starts at the lowest/highest candle
+				rightIdx = extendRight ? bar_index + 1 : bar_index
+				fill = isGreen ? supFill : resFill
+				bord = isGreen ? supBord : resBord
+				b = box.new(leftIdx, top, rightIdx, bottom, border_color = bord, bgcolor = fill, border_width = 1)
+				array.push(zBox, b)
+				array.push(zSup, isGreen)
+				array.push(zTop, top)
+				array.push(zBot, bottom)
+				array.push(zAlive, true)
+				if array.size(zBox) > maxZones
+					box.delete(array.shift(zBox))
+					array.shift(zSup)
+					array.shift(zTop)
+					array.shift(zBot)
+					array.shift(zAlive)
 
 // keep live zones stretched to the developing bar
 if extendRight and array.size(zBox) > 0
-    for i = 0 to array.size(zBox) - 1
-        if array.get(zAlive, i)
-            box.set_right(array.get(zBox, i), bar_index + 1)
+	for i = 0 to array.size(zBox) - 1
+		if array.get(zAlive, i)
+			box.set_right(array.get(zBox, i), bar_index + 1)
