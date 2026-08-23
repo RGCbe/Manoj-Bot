@@ -8,7 +8,9 @@
 //        3 green -> higher highs -> bullish reversal -> SUPPORT zone
 //        3 red   -> lower  lows  -> bearish reversal -> RESISTANCE zone
 //
-//   2. BAND - drawn body -> wick, anchored to the nearest low/high
+//   2. BAND - drawn body -> wick, anchored to the nearest low/high. The box
+//      starts at the lowest (support) / highest (resistance) candle and ends
+//      at the candle that breaks it:
 //        support   : top = lowest body,  bottom = lowest wick
 //        resistance: top = highest wick, bottom = highest body
 //
@@ -34,18 +36,15 @@ supBord   = input.color(color.green, "Live support border",    group = "Colours"
 resBord   = input.color(color.red,   "Live resistance border", group = "Colours")
 deadBord  = input.color(color.gray,  "Dead border",            group = "Colours")
 
-// ---- a marked zone ----------------------------------------------------------
-type Zone
-    box   bx
-    bool  isSupport
-    float top
-    float bottom
-    bool  alive
-
-var array<Zone> zones = array.new<Zone>()
+// ---- zone state (parallel arrays; index i = one zone) -----------------------
+var array<box>   zBox   = array.new<box>()
+var array<bool>  zSup   = array.new<bool>()    // true = support (3 green)
+var array<float> zTop   = array.new<float>()
+var array<float> zBot   = array.new<float>()
+var array<bool>  zAlive = array.new<bool>()
 
 // candle colour at a history offset: 1 = green, -1 = red, 0 = doji
-cColor(int offset) =>
+cColor(offset) =>
     o = open[offset]
     c = close[offset]
     c > o ? 1 : c < o ? -1 : 0
@@ -55,19 +54,22 @@ cColor(int offset) =>
 // -----------------------------------------------------------------------------
 if barstate.isconfirmed
     // (a) age every live zone against the just-closed bar (offset 0)
-    if array.size(zones) > 0
-        for i = 0 to array.size(zones) - 1
-            z = array.get(zones, i)
-            if z.alive
-                died = z.isSupport ? (low  < z.bottom - deathBuf) : (high > z.top + deathBuf)
+    if array.size(zBox) > 0
+        for i = 0 to array.size(zBox) - 1
+            if array.get(zAlive, i)
+                isSup = array.get(zSup, i)
+                zt    = array.get(zTop, i)
+                zb    = array.get(zBot, i)
+                b     = array.get(zBox, i)
+                died  = isSup ? (low < zb - deathBuf) : (high > zt + deathBuf)
                 if died
-                    z.alive := false
-                    box.set_right(z.bx, bar_index)
-                    box.set_bgcolor(z.bx, deadFill)
-                    box.set_border_color(z.bx, deadBord)
-                    box.set_border_style(z.bx, line.style_dotted)
+                    array.set(zAlive, i, false)
+                    box.set_right(b, bar_index)
+                    box.set_bgcolor(b, deadFill)
+                    box.set_border_color(b, deadBord)
+                    box.set_border_style(b, line.style_dotted)
                 else if extendRight
-                    box.set_right(z.bx, bar_index + 1)
+                    box.set_right(b, bar_index + 1)
 
     // (b) detect a formation completing on this bar (c3=0, c2=1, c1=2)
     col1 = cColor(2)
@@ -124,10 +126,9 @@ if barstate.isconfirmed
 
             // skip if it overlaps a still-live zone of the same type
             overlap = false
-            if array.size(zones) > 0
-                for i = 0 to array.size(zones) - 1
-                    z = array.get(zones, i)
-                    if z.alive and z.isSupport == isGreen and not (top < z.bottom or bottom > z.top)
+            if array.size(zBox) > 0
+                for i = 0 to array.size(zBox) - 1
+                    if array.get(zAlive, i) and array.get(zSup, i) == isGreen and not (top < array.get(zBot, i) or bottom > array.get(zTop, i))
                         overlap := true
 
             if not overlap
@@ -136,14 +137,20 @@ if barstate.isconfirmed
                 fill = isGreen ? supFill : resFill
                 bord = isGreen ? supBord : resBord
                 b = box.new(leftIdx, top, rightIdx, bottom, border_color = bord, bgcolor = fill, border_width = 1)
-                array.push(zones, Zone.new(b, isGreen, top, bottom, true))
-                if array.size(zones) > maxZones
-                    old = array.shift(zones)
-                    box.delete(old.bx)
+                array.push(zBox, b)
+                array.push(zSup, isGreen)
+                array.push(zTop, top)
+                array.push(zBot, bottom)
+                array.push(zAlive, true)
+                if array.size(zBox) > maxZones
+                    box.delete(array.shift(zBox))
+                    array.shift(zSup)
+                    array.shift(zTop)
+                    array.shift(zBot)
+                    array.shift(zAlive)
 
 // keep live zones stretched to the developing bar
-if extendRight and array.size(zones) > 0
-    for i = 0 to array.size(zones) - 1
-        z = array.get(zones, i)
-        if z.alive
-            box.set_right(z.bx, bar_index + 1)
+if extendRight and array.size(zBox) > 0
+    for i = 0 to array.size(zBox) - 1
+        if array.get(zAlive, i)
+            box.set_right(array.get(zBox, i), bar_index + 1)
