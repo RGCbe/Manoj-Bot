@@ -1,6 +1,6 @@
-//@version=5
+//@version=6
 // =============================================================================
-//  Weak Zones (Manoj-Bot)  -  TradingView / Pine Script v5
+//  Weak Zones (Manoj-Bot)  -  TradingView / Pine Script v6
 // =============================================================================
 //  Marks "weak point / reversal zones" using the trade-plan rules (pages 1-3):
 //

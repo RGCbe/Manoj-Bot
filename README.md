@@ -39,7 +39,7 @@ edge frozen) and turns grey/dotted.
 | File | Platform | Purpose |
 |------|----------|---------|
 | `MQL5/Indicators/WeakZones.mq5` | MetaTrader 5 | Draws the zones on an MT5 chart (production) |
-| `pine/WeakZones.pine` | TradingView (Pine v5) | Same zones on TradingView — easiest way to compare against your manual marks |
+| `pine/WeakZones.pine` | TradingView (Pine v6) | Same zones on TradingView — easiest way to compare against your manual marks |
 | `tools/weak_zones_ref.py` | Python (no deps) | Reference implementation + chart renderer to *verify* the logic |
 
 All three use the **identical** algorithm and the **same input names**, so a zone
