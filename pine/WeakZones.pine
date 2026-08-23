@@ -44,10 +44,7 @@ var array<float> zBot   = array.new<float>()
 var array<bool>  zAlive = array.new<bool>()
 
 // candle colour at a history offset: 1 = green, -1 = red, 0 = doji
-cColor(offset) =>
-    o = open[offset]
-    c = close[offset]
-    c > o ? 1 : c < o ? -1 : 0
+cColor(offset) => close[offset] > open[offset] ? 1 : close[offset] < open[offset] ? -1 : 0
 
 // -----------------------------------------------------------------------------
 //  Act once per closed bar
