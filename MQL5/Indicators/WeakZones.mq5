@@ -180,15 +180,17 @@ void ProcessBar(const int b,
    if(!breaks) return;
 
    //--- build the band from the anchor window -----------------------------
+   //    (extremeIdx = the lowest / highest candle; the box starts there)
    double top, bottom;
+   int    extremeIdx = c3;
    if(isGreen)
    {
       bottom = low[c3];                  // low wick
       top    = MathMin(open[c3], close[c3]); // low body
       for(int k = c3; k <= wEnd; k++)
       {
-         bottom = MathMin(bottom, low[k]);
-         top    = MathMin(top,    MathMin(open[k], close[k]));
+         if(low[k] < bottom) { bottom = low[k]; extremeIdx = k; }
+         top = MathMin(top, MathMin(open[k], close[k]));
       }
    }
    else
@@ -197,7 +199,7 @@ void ProcessBar(const int b,
       bottom = MathMax(open[c3], close[c3]); // high body
       for(int k = c3; k <= wEnd; k++)
       {
-         top    = MathMax(top,    high[k]);
+         if(high[k] > top) { top = high[k]; extremeIdx = k; }
          bottom = MathMax(bottom, MathMax(open[k], close[k]));
       }
    }
@@ -218,7 +220,7 @@ void ProcessBar(const int b,
    z.isSupport = isGreen;
    z.top       = top;
    z.bottom    = bottom;
-   z.leftTime  = time[wEnd];
+   z.leftTime  = time[extremeIdx];   // box starts at the lowest/highest candle
    z.rightTime = time[c3];
    z.alive     = true;
    z.name      = InpPrefix + (isGreen ? "S_" : "R_") + IntegerToString((long)time[c3]);

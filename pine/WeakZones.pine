@@ -102,17 +102,22 @@ if barstate.isconfirmed
         if breaks
             float top    = na
             float bottom = na
+            int   extreme = 0          // offset of the lowest / highest candle
             if isGreen
                 bottom := low[0]
                 top    := math.min(open[0], close[0])
                 for k = 0 to wEnd
-                    bottom := math.min(bottom, low[k])
-                    top    := math.min(top, math.min(open[k], close[k]))
+                    if low[k] < bottom
+                        bottom := low[k]
+                        extreme := k
+                    top := math.min(top, math.min(open[k], close[k]))
             else
                 top    := high[0]
                 bottom := math.max(open[0], close[0])
                 for k = 0 to wEnd
-                    top    := math.max(top, high[k])
+                    if high[k] > top
+                        top := high[k]
+                        extreme := k
                     bottom := math.max(bottom, math.max(open[k], close[k]))
             if top <= bottom
                 top := bottom + syminfo.mintick
@@ -126,7 +131,7 @@ if barstate.isconfirmed
                         overlap := true
 
             if not overlap
-                leftIdx  = bar_index - wEnd
+                leftIdx  = bar_index - extreme   // box starts at the lowest/highest candle
                 rightIdx = extendRight ? bar_index + 1 : bar_index
                 fill = isGreen ? supFill : resFill
                 bord = isGreen ? supBord : resBord

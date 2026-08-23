@@ -22,6 +22,10 @@ nearest low/high (the formation candles plus a small `lookback`):
 - **support:** `top = lowest body`, `bottom = lowest wick`
 - **resistance:** `top = highest wick`, `bottom = highest body`
 
+The box **starts at the lowest candle** (support) / **highest candle**
+(resistance) — the wick candle itself — and **ends at the candle that breaks
+it**.
+
 **3. Live / Dead** — the zone stays **LIVE** while price only *touches into* the
 band. It **DIES** the moment a **wick _or_ body fully breaks through the far
 edge** (below a support / above a resistance). On death the box **stops** (right

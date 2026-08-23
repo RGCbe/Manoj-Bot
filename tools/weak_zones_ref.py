@@ -86,12 +86,14 @@ def detect_weak_zones(candles, lookback=2, allow_doji=False, death_buffer=0.0):
         if not breaks:
             continue
 
-        window = range(w_end, c3 + 1)
+        window = list(range(w_end, c3 + 1))
         if is_green:
-            bottom = min(candles[k][L] for k in window)                       # low wick
+            ext = min(window, key=lambda k: candles[k][L])                    # lowest-low candle
+            bottom = candles[ext][L]                                          # low wick
             top = min(min(candles[k][O], candles[k][C]) for k in window)      # low body
         else:
-            top = max(candles[k][H] for k in window)                          # high wick
+            ext = max(window, key=lambda k: candles[k][H])                    # highest-high candle
+            top = candles[ext][H]                                             # high wick
             bottom = max(max(candles[k][O], candles[k][C]) for k in window)   # high body
         if top <= bottom:
             top = bottom + 1e-9
@@ -108,7 +110,7 @@ def detect_weak_zones(candles, lookback=2, allow_doji=False, death_buffer=0.0):
         zones.append({
             "is_support": is_green,
             "top": top, "bottom": bottom,
-            "left_idx": w_end, "create_idx": c3, "right_idx": c3,
+            "left_idx": ext, "create_idx": c3, "right_idx": c3,   # box starts at the lowest/highest candle
             "alive": True, "death_idx": None,
         })
 
