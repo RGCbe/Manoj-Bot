@@ -109,6 +109,25 @@ import datetime as _dt
 _IST = _dt.timezone(_dt.timedelta(hours=5, minutes=30))
 
 
+# --------------------------------------------------------------------------- #
+#  Stop-loss buffer table - CONFIRMED (p4 "Buffer Points stop loss").
+#  The buffer added beyond the stop is not fixed: it scales with the raw
+#  entry-to-stop distance. p6's worked example uses it - a 7 point raw distance
+#  falls in the 06-10 band -> 1 point, giving 7 + 1 + 0.3 = R 8.3.
+# --------------------------------------------------------------------------- #
+SL_BUFFER_TABLE = [(5, 0.5), (10, 1.0), (20, 1.5), (30, 2.0),
+                   (40, 3.0), (50, 4.0), (60, 5.0)]
+
+
+def sl_buffer_for(points):
+    """Stop-loss buffer for a raw stop distance of `points` (p4 table).
+    Beyond the last band the widest buffer is kept."""
+    for upper, buf in SL_BUFFER_TABLE:
+        if points <= upper:
+            return buf
+    return SL_BUFFER_TABLE[-1][1]
+
+
 def break_events(zones):
     """{bar_index: +1 buy-side break / -1 sell-side break}.
 
@@ -179,7 +198,8 @@ def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
 # --------------------------------------------------------------------------- #
 def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                    min_zone_r=2.5, tp_r=3.0, zones=None,
-                   times=None, daily_bias=False, anchor_hours=4):
+                   times=None, daily_bias=False, anchor_hours=4,
+                   use_sl_table=False):
     """Walk the candles in order, holding at most one position.
 
     While a trade is open no new order is placed, so signals that appear during
@@ -222,10 +242,15 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                 break
             if side > 0:
                 entry = c2[H] + entry_buffer
-                sl    = min(c1[L], c2[L]) - sl_buffer
+                raw   = min(c1[L], c2[L])
+                # p4 table: the stop buffer scales with the raw stop distance
+                buf   = sl_buffer_for(entry - raw) if use_sl_table else sl_buffer
+                sl    = raw - buf
             else:
                 entry = c2[L] - entry_buffer
-                sl    = max(c1[H], c2[H]) + sl_buffer
+                raw   = max(c1[H], c2[H])
+                buf   = sl_buffer_for(raw - entry) if use_sl_table else sl_buffer
+                sl    = raw + buf
             R = abs(entry - sl)
             if R <= 0:
                 break

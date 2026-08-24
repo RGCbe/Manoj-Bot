@@ -92,8 +92,62 @@ win rate from 37.5% to **47.9%** (+32R -> +44R).
 | Orders | Placed at 2nd candle close, live for the 3rd candle only | ✅ |
 | Zone clearance | Entry to weak-zone low must be >= 2.5R, or no zone present | ✅ |
 | Take profit | 3R | ✅ |
-| Entry price | At the 2nd candle's high + buffer 0.100 + spread 0.200 = 0.3 point (from p6) | ❓ not yet confirmed |
-| Stop loss | Low of both candles + 0.3 spread + 7 point + 1 point per table = 8.3 (from p6) | ❓ not yet confirmed |
+| Entry price | 2nd candle's high **+ buffer 0.100 + spread** (p6) | ✅ |
+| Stop loss | Low of both candles **− (1 point per table + buffer + spread)** (p6) | ✅ |
+
+## Entry / SL buffers ✅ (p6)
+
+Page 6 gives them for the mentor's gold broker:
+
+> Entry @ only High with **Buffer 0.100** and **0.200 Spread** ⇒ **0.3 Point**
+> SL @ Low of the both with **0.3 spread + 7 point + 1 point as per table** ⇒ **8.3**
+> SL ⇒ **P + B.f + SP** (Point + Buffer + Spread)
+
+So, for a buy (mirrored for a sell):
+
+    entry = 2nd_high + buffer(0.100) + spread
+    SL    = min(low1, low2) - (1 point per table + buffer + spread)
+
+With the mentor's 0.200 spread that is **entry +0.3 / SL −1.3**, which turns a raw
+7-point entry-to-low distance into **R = 8.3**.
+
+**The spread is broker-specific, so these are not universal constants.** Measured
+live on Delta India, XAUTUSD quotes a **0.030** spread (tick size 0.01, taker fee
+0.01%) — nearly 7x tighter than the mentor's gold broker — giving +0.13 / −1.13
+there.
+
+Effect on August (see benchmark below): on **spot** the buffers lift the win rate
+34.6% -> 40.9% (mentor's values) and are the best spot result so far at 47.8% with
+the tighter pair. On **Delta** they *hurt* (46.2% -> 34.6%), because a 1.3-point
+stop pad is over-wide for a 0.03-spread instrument: it inflates R and pushes the
+3R target out of reach.
+
+### The buffer table ✅ (p4 "Buffer Points stop loss")
+
+The "1 point as per table" is **not fixed** — the stop buffer scales with the raw
+entry-to-stop distance:
+
+| Raw stop distance (points) | Buffer |
+|---|---|
+| 01 - 05 | 0.500 |
+| 06 - 10 | 1 |
+| 11 - 20 | 1.5 |
+| 21 - 30 | 2 |
+| 31 - 40 | 3 |
+| 41 - 50 | 4 |
+| 51 - 60 | 5 |
+
+This confirms p6's worked example: a 7-point raw distance falls in the 06-10 band
+-> buffer 1 -> **7 + 1 + 0.3 = R 8.3** exactly. Implemented as `sl_buffer_for()`
+in `tools/backtest.py` (`use_sl_table=True`); beyond 60 points the widest buffer
+is kept.
+
+Also on p4: risk 1% per trade, weak point at 2.5, target **1:3 fixed**, and a
+cent-account conversion table (1$ = 100 cents ... 50$ = 5000 cents).
+
+August results with the scaled table: **spot 21 trades at 42.9%** (its best yet,
+up from 34.6% with no buffers); Delta 32 trades at 34.4% (down from 46.2%, the
+buffers being over-wide for its 0.03 spread).
 
 ### 2. Bearish Engulfing → SELL
 Not yet reviewed.
