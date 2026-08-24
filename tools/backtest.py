@@ -95,6 +95,45 @@ def zone_clearance_ok(zones, bar, entry, R, side, min_r=2.5):
     return abs(nearest - entry) >= min_r * R, nearest
 
 
+# --------------------------------------------------------------------------- #
+#  Daily directional bias - CONFIRMED (docs/ENTRY_RULES.md):
+#  the FIRST weak-zone break of the trading day sets the day's direction.
+#    upside break (a resistance broken up)   -> long only
+#    downside break (a support broken down)  -> short only
+#  The "day" resets at the gold session reopen, not calendar midnight, so a
+#  timestamp is shifted back `anchor_hours` before its date is taken (default 4h
+#  -> a day runs from ~04:00 IST). Overnight carry-over breaks must not set it.
+# --------------------------------------------------------------------------- #
+import datetime as _dt
+
+_IST = _dt.timezone(_dt.timedelta(hours=5, minutes=30))
+
+
+def first_break_bias(zones, times, anchor_hours=4, tz=_IST):
+    """{trading_day: (break_bar, +1 long-only / -1 short-only)} — the day's
+    first weak-zone break. `times` is epoch seconds per bar (len == candles)."""
+    deaths = sorted((z["death_idx"], (+1 if not z["is_support"] else -1))
+                    for z in zones if z["death_idx"] is not None)
+    out = {}
+    for idx, direction in deaths:
+        day = (_dt.datetime.fromtimestamp(times[idx], tz)
+               - _dt.timedelta(hours=anchor_hours)).date()
+        if day not in out:
+            out[day] = (idx, direction)
+    return out
+
+
+def bias_side_at(bias_map, times, bar, anchor_hours=4, tz=_IST):
+    """+1 long-only, -1 short-only, or 0 if the day's first break hasn't happened
+    yet (no bias in force -> both directions allowed)."""
+    day = (_dt.datetime.fromtimestamp(times[bar], tz)
+           - _dt.timedelta(hours=anchor_hours)).date()
+    fb = bias_map.get(day)
+    if fb is not None and bar >= fb[0]:
+        return fb[1]
+    return 0
+
+
 def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
               min_zone_r=2.5, tp_r=3.0, zones=None):
     if zones is None:
@@ -150,19 +189,30 @@ def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
 #  A new order is only placed once the previous trade has closed.
 # --------------------------------------------------------------------------- #
 def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
-                   min_zone_r=2.5, tp_r=3.0, zones=None):
+                   min_zone_r=2.5, tp_r=3.0, zones=None,
+                   times=None, daily_bias=False, anchor_hours=4):
     """Walk the candles in order, holding at most one position.
 
     While a trade is open no new order is placed, so signals that appear during
     it are skipped. When several models signal on the same bar the first one
     listed wins.
+
+    daily_bias=True applies the first-weak-point-break direction filter: only
+    trades that match the day's first break are taken (requires `times`, the
+    epoch-seconds timestamp of each bar).
     """
     if zones is None:
         zones = detect_weak_zones(candles)
     models = models or list(MODELS)
 
+    bias_map = None
+    if daily_bias:
+        if times is None:
+            raise ValueError("daily_bias=True requires `times` (epoch seconds per bar)")
+        bias_map = first_break_bias(zones, times, anchor_hours)
+
     result = {m: {"win": 0, "loss": 0, "open": 0} for m in models}
-    rej = {"zone": 0, "no_fill": 0, "busy": 0}
+    rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0}
     log = []
     busy_until = -1                                   # bar index the open trade exits on
 
@@ -178,6 +228,12 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                 break
 
             side = MODELS[m][1]
+            # daily first-break bias: skip trades against the day's direction
+            if bias_map is not None:
+                b = bias_side_at(bias_map, times, j, anchor_hours)
+                if b != 0 and side != b:
+                    rej["bias"] += 1
+                    break
             if side > 0:
                 entry = c2[H] + entry_buffer
                 sl    = min(c1[L], c2[L]) - sl_buffer
@@ -237,4 +293,6 @@ def report(result, rej, title, tp_r=3.0):
     lines.append(f"skipped - trade already open: {rej['busy']}")
     lines.append(f"skipped - zone too close    : {rej['zone']}")
     lines.append(f"skipped - never triggered   : {rej['no_fill']}")
+    if rej.get("bias"):
+        lines.append(f"skipped - against day bias  : {rej['bias']}")
     return "\n".join(lines)

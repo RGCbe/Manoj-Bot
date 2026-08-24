@@ -53,6 +53,29 @@ Run this **after** the stop loss is calculated, since it is measured in R:
 The idea: if a zone sits closer than 2.5, price meets that obstacle before the
 trade can reach its target, so the setup is not worth taking.
 
+## Daily directional bias — first weak-point break ✅ (applies to all 4 models)
+
+The **first weak-zone break of the trading day sets the day's direction**, and
+only trades in that direction are taken for the rest of that day:
+
+- First break is **upside** (a resistance broken up) -> **long only** (buys allowed, sells skipped).
+- First break is **downside** (a support broken down) -> **short only** (sells allowed, buys skipped).
+
+"Break" here is a zone death (README rule 5): a support dies on a downside break,
+a resistance dies on an upside break — so the death direction **is** the break
+direction.
+
+The trading "day" resets at the **gold session reopen (~03:30 IST)**, not calendar
+midnight. This matters: overnight carry-over breaks (00:00–02:00 IST, the tail of
+the previous US session) must not set the bias. Measured from the session, trading
+**with** the first-break direction wins 29% vs 18% **against** it on August gold;
+measured from midnight the signal is polluted and disappears. Before the day's
+first break, no bias is in force (both directions allowed).
+
+Open: the exact session-start hour for "the day" (03:30 reopen vs the mentor's
+morning watch window); whether the bias **locks** for the day or **flips** on a
+later opposite break.
+
 ## The 4 models
 
 | # | Model | Direction |
@@ -90,18 +113,29 @@ Not yet reviewed.
 - Harami confirmation (p9): the 2nd candle sits inside the 1st, so does its **wick**
   break the 1st candle's low/high?
 - Do these patterns only fire **at a weak zone**, or anywhere on the chart?
+  Tested: a hard "only at an opposing zone" filter is **wrong** — the Aug 5 winning
+  buy fired in open space (no support at entry), so requiring a zone kills winners
+  too. Entries fire anywhere; the zone only feeds the 2.5R clearance check.
 
 ## Benchmark: the mentor's August on gold
 
 | | trades | wins | losses | win rate | net |
 |---|---|---|---|---|---|
 | **Mentor** | 27 | 16 | 11 | **59.3%** | **+37R** |
-| Bot (current rules) | 57 | 10 | 47 | 17.5% | -17R |
+| Bot — baseline (both directions) | 79 | 23 | 56 | 29.1% | +13R |
+| Bot — + first-break bias filter | 58 | 19 | 39 | 32.8% | +18R |
+
+(On Dukascopy spot XAUUSD, 15m, all hours. The mentor trades TradingView /
+FOREX.com — a different feed, which shifts wicks/colours and so the exact
+formations.)
 
 This is the target to reproduce. The gap is not a tuning gap - a 59% win rate
 at 1:3 is a different system from what is currently implemented, and no session
 window, SL buffer or target setting tested so far gets close to both the trade
-count and the win rate at once.
+count and the win rate at once. The first-break bias (above) is confirmed and
+helps, but entries still win only ~30% (barely above the 25% break-even for a 3R
+target) — entry **quality** (p11 NOT-TRADE conditions) is the remaining lever,
+not direction.
 
 An earlier note here claimed a 06:00-10:30 IST window reproduced the mentor's
 count. That was wrong: the 16 was the mentor's **wins**, not the total. Session
