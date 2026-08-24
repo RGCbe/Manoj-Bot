@@ -78,7 +78,7 @@ stops. Point the same `detect_weak_zones()` at your own OHLC data to check it.
 
 | Input | Default | What it does |
 |-------|---------|--------------|
-| `lookback` / `InpAnchorLookback` | `8` | Candles before the 1st candle to include when finding the nearest low/high. `4` was chosen by matching a hand-marked zone on real BTC 15m data (see below); raise it to reach a deeper swing. |
+| `lookback` / `InpAnchorLookback` | `8` | Candles before the 1st candle to include when finding the nearest low/high. |
 | `allowDoji` / `InpAllowDoji` | `false` | Whether a doji may sit inside the 3-candle run |
 | `minBodyPct` / `InpMinBodyPct` | `0` (off) | Optional: reject a formation containing an indecisive candle (body smaller than this share of its high-low range). Off by default — the rule as written counts every valid formation. |
 | `deathBuf` / `InpDeathBufferPts` | `0` | Extra distance past the far edge before the zone is called dead (filters tiny stop-hunt wicks). `0` = exact rule. |
@@ -95,11 +95,12 @@ These match the rule as decoded from the notes; adjust the inputs to taste:
 - **Death** is evaluated on **closed candles** (an intrabar wick that is not there
   at close does not kill the zone). Use `deathBuf` if you want a tolerance.
 - **Anchor** uses a fixed `lookback` window as a stand-in for "the nearest swing
-  low/high". The default of `4` was validated against a hand-marked zone on real
-  BTC-USD 15m candles: a formation completing at 12:00 IST on 2026-08-23 produced
-  a band of **75,602 - 75,865** starting at the 10:45 candle, matching the
-  hand-marked **75,600 - 75,900** starting at ~10:45. Raising it further widens
-  the search without changing the number of zones.
+  low/high". A `lookback` of 4 was first validated against a hand-marked zone on
+  real BTC-USD 15m candles - a formation completing at 12:00 IST on 2026-08-23
+  produced a band of **75,602 - 75,865** starting at the 10:45 candle, matching
+  the hand-marked **75,600 - 75,900** - and the default was later widened to
+  **8** on instruction. Widening reaches deeper swings without changing how many
+  zones are marked.
 
 - **Candle colour can differ between exchange feeds.** In the example above the
   11:30 bar closed 28 points below its open on one feed (red) and above it on
