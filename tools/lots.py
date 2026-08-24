@@ -28,18 +28,26 @@ def risk_amount(balance, risk_pct):
     return balance * risk_pct / 100.0
 
 
-def lot_size(balance, risk_pct, sl_points, min_lot=MIN_LOT, step=LOT_STEP):
+def lot_size(balance, risk_pct, sl_points, min_lot=MIN_LOT, step=LOT_STEP,
+             floor_min=False):
     """Lot for `sl_points` of stop distance, rounded DOWN to the lot step.
 
-    Returns 0.0 when even the minimum lot would risk more than intended - the
-    trade is too wide for the account and should be skipped.
+    By default returns 0.0 when even the minimum lot would risk more than
+    intended - the trade is too wide for the account and should be skipped.
+
+    floor_min=True takes the minimum lot anyway. On a small account that means
+    the risk percentage stops being honoured: the real risk becomes whatever the
+    stop happens to be. On $100 against our gold trades that is a median 7.6%
+    and up to 28.8% on a single trade, so use `plan()` and watch `over_risk`.
     """
     if sl_points <= 0:
         raise ValueError("sl_points must be > 0")
     raw = risk_amount(balance, risk_pct) / (sl_points * VALUE_PER_POINT_PER_LOT)
     lots = math.floor(raw / step) * step
     lots = round(lots, 2)
-    return lots if lots >= min_lot else 0.0
+    if lots >= min_lot:
+        return lots
+    return min_lot if floor_min else 0.0
 
 
 def trade_value(lots, points):
@@ -47,19 +55,27 @@ def trade_value(lots, points):
     return lots * points * VALUE_PER_POINT_PER_LOT
 
 
-def plan(balance, risk_pct, sl_points, tp_r=3.0):
-    """Full sizing for one trade."""
-    lots = lot_size(balance, risk_pct, sl_points)
+def plan(balance, risk_pct, sl_points, tp_r=3.0, floor_min=False):
+    """Full sizing for one trade.
+
+    `risk_actual_pct` is what the trade really risks; when `floor_min` forces the
+    minimum lot on a stop the account cannot afford, `over_risk` marks it and
+    that figure is the one that matters, not `risk_pct`.
+    """
+    lots = lot_size(balance, risk_pct, sl_points, floor_min=floor_min)
+    risk_actual = trade_value(lots, sl_points)
     return {
-        "balance":     balance,
-        "risk_pct":    risk_pct,
-        "risk_target": risk_amount(balance, risk_pct),
-        "sl_points":   sl_points,
-        "lots":        lots,
-        "risk_actual": trade_value(lots, sl_points),
-        "tp_points":   sl_points * tp_r,
-        "reward":      trade_value(lots, sl_points * tp_r),
-        "skip":        lots == 0.0,
+        "balance":         balance,
+        "risk_pct":        risk_pct,
+        "risk_target":     risk_amount(balance, risk_pct),
+        "sl_points":       sl_points,
+        "lots":            lots,
+        "risk_actual":     risk_actual,
+        "risk_actual_pct": risk_actual / balance * 100 if balance else 0.0,
+        "over_risk":       risk_actual > risk_amount(balance, risk_pct) + 1e-9,
+        "tp_points":       sl_points * tp_r,
+        "reward":          trade_value(lots, sl_points * tp_r),
+        "skip":            lots == 0.0,
     }
 
 
@@ -77,3 +93,11 @@ if __name__ == "__main__":
         print(f"{'SL POINT':>9}{'RISK $':>9}{'LOT':>8}{'REWARD 1:3':>12}")
         for sl, r, l, rew in table(1000, pct):
             print(f"{sl:>9}{r:>9.0f}{l:>8.2f}{rew:>12.0f}")
+
+    print("\n$100 account, 5% risk, always taking the minimum lot")
+    print(f"{'SL POINT':>9}{'LOT':>8}{'RISK $':>9}{'RISK %':>9}   note")
+    for sl in (3, 5, 8, 10, 15, 20, 30, 37):
+        p = plan(100, 5, sl, floor_min=True)
+        note = "OVER the 5% target" if p["over_risk"] else ""
+        print(f"{sl:>9}{p['lots']:>8.2f}{p['risk_actual']:>9.2f}"
+              f"{p['risk_actual_pct']:>8.1f}%   {note}")
