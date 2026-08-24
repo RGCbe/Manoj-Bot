@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Generated verification output
+weak_zones_demo.png
+*.tmp
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+
+# MetaTrader build output
+*.ex5
