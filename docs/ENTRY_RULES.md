@@ -53,28 +53,25 @@ Run this **after** the stop loss is calculated, since it is measured in R:
 The idea: if a zone sits closer than 2.5, price meets that obstacle before the
 trade can reach its target, so the setup is not worth taking.
 
-## Daily directional bias — first weak-point break ✅ (applies to all 4 models)
+## Directional bias — a zone break sets the NEXT ENTRY ✅ (applies to all 4 models)
 
-The **first weak-zone break of the trading day sets the day's direction**, and
-only trades in that direction are taken for the rest of that day:
+A weak-zone break sets the direction of **the next entry only**:
 
-- First break is **upside** (a resistance broken up) -> **long only** (buys allowed, sells skipped).
-- First break is **downside** (a support broken down) -> **short only** (sells allowed, buys skipped).
+- Break on the **buy side** (a resistance broken up) -> **the next entry is a BUY**.
+- Break on the **sell side** (a support broken down) -> **the next entry is a SELL**.
 
-"Break" here is a zone death (README rule 5): a support dies on a downside break,
-a resistance dies on an upside break — so the death direction **is** the break
+**This is not a bias for the rest of the day.** Once that entry is taken the
+direction is spent; nothing more is traded until the next zone break arms a new
+one. If two breaks happen with no entry between them, the later one is in force.
+
+"Break" here is a zone death (README rule 5): a support dies on a sell-side break,
+a resistance dies on a buy-side break — so the death direction **is** the break
 direction.
 
-The trading "day" resets at the **gold session reopen (~03:30 IST)**, not calendar
-midnight. This matters: overnight carry-over breaks (00:00–02:00 IST, the tail of
-the previous US session) must not set the bias. Measured from the session, trading
-**with** the first-break direction wins 29% vs 18% **against** it on August gold;
-measured from midnight the signal is polluted and disappears. Before the day's
-first break, no bias is in force (both directions allowed).
-
-Open: the exact session-start hour for "the day" (03:30 reopen vs the mentor's
-morning watch window); whether the bias **locks** for the day or **flips** on a
-later opposite break.
+Measured both ways on August gold, the "next entry only" reading is clearly the
+right one — it takes **26 August trades on spot against the mentor's 27**, where
+treating the first break as a whole-day lock took 43. On Delta XAUT it lifts the
+win rate from 37.5% to **47.9%** (+32R -> +44R).
 
 ## The 4 models
 
@@ -121,13 +118,18 @@ Not yet reviewed.
 
 | | trades | wins | losses | win rate | net |
 |---|---|---|---|---|---|
-| **Mentor** | 27 | 16 | 11 | **59.3%** | **+37R** |
-| Bot — baseline (both directions) | 79 | 23 | 56 | 29.1% | +13R |
-| Bot — + first-break bias filter | 58 | 19 | 39 | 32.8% | +18R |
+| **Mentor** (August) | 27 | 16 | 11 | **59.3%** | **+37R** |
+| Bot — spot, August only | 26 | 9 | 17 | 34.6% | +10R |
+| Bot — Delta XAUT (Jul 25 - Aug 24) | 48 | 23 | 25 | 47.9% | +44R |
 
-(On Dukascopy spot XAUUSD, 15m, all hours. The mentor trades TradingView /
-FOREX.com — a different feed, which shifts wicks/colours and so the exact
-formations.)
+The **trade count now matches** (26 vs 27 in August) — the remaining gap is win
+rate, i.e. entry/exit mechanics rather than trade selection.
+
+Feeds differ: Dukascopy spot XAUUSD vs Delta's XAUT (Tether Gold) perpetual,
+which tracks spot with 0.983 correlation on 15m moves but trades at a widening
+~$13 (-0.30%) discount and runs 24/7 including weekends. The mentor trades
+TradingView / FOREX.com spot — a third feed again, which shifts wicks and
+candle colours and so the exact formations.
 
 This is the target to reproduce. The gap is not a tuning gap - a 59% win rate
 at 1:3 is a different system from what is currently implemented, and no session

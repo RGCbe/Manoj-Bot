@@ -96,42 +96,31 @@ def zone_clearance_ok(zones, bar, entry, R, side, min_r=2.5):
 
 
 # --------------------------------------------------------------------------- #
-#  Daily directional bias - CONFIRMED (docs/ENTRY_RULES.md):
-#  the FIRST weak-zone break of the trading day sets the day's direction.
-#    upside break (a resistance broken up)   -> long only
-#    downside break (a support broken down)  -> short only
-#  The "day" resets at the gold session reopen, not calendar midnight, so a
-#  timestamp is shifted back `anchor_hours` before its date is taken (default 4h
-#  -> a day runs from ~04:00 IST). Overnight carry-over breaks must not set it.
+#  Directional bias - CONFIRMED (docs/ENTRY_RULES.md):
+#  a weak-zone break sets the direction of THE NEXT ENTRY ONLY.
+#    break on the buy side (a resistance broken up)   -> next entry is a BUY
+#    break on the sell side (a support broken down)   -> next entry is a SELL
+#  It is NOT a bias for the rest of the day: once that entry is taken the
+#  direction is spent, and nothing is traded until the next zone break arms a
+#  new one. Two breaks with no entry between them -> the later one is in force.
 # --------------------------------------------------------------------------- #
 import datetime as _dt
 
 _IST = _dt.timezone(_dt.timedelta(hours=5, minutes=30))
 
 
-def first_break_bias(zones, times, anchor_hours=4, tz=_IST):
-    """{trading_day: (break_bar, +1 long-only / -1 short-only)} — the day's
-    first weak-zone break. `times` is epoch seconds per bar (len == candles)."""
-    deaths = sorted((z["death_idx"], (+1 if not z["is_support"] else -1))
-                    for z in zones if z["death_idx"] is not None)
+def break_events(zones):
+    """{bar_index: +1 buy-side break / -1 sell-side break}.
+
+    A zone dies when price breaks through it (weak_zones_ref), so the death is
+    the break: a resistance dying means price broke UP through it, a support
+    dying means price broke DOWN through it.
+    """
     out = {}
-    for idx, direction in deaths:
-        day = (_dt.datetime.fromtimestamp(times[idx], tz)
-               - _dt.timedelta(hours=anchor_hours)).date()
-        if day not in out:
-            out[day] = (idx, direction)
+    for z in zones:
+        if z["death_idx"] is not None:
+            out.setdefault(z["death_idx"], +1 if not z["is_support"] else -1)
     return out
-
-
-def bias_side_at(bias_map, times, bar, anchor_hours=4, tz=_IST):
-    """+1 long-only, -1 short-only, or 0 if the day's first break hasn't happened
-    yet (no bias in force -> both directions allowed)."""
-    day = (_dt.datetime.fromtimestamp(times[bar], tz)
-           - _dt.timedelta(hours=anchor_hours)).date()
-    fb = bias_map.get(day)
-    if fb is not None and bar >= fb[0]:
-        return fb[1]
-    return 0
 
 
 def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
@@ -197,19 +186,15 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     it are skipped. When several models signal on the same bar the first one
     listed wins.
 
-    daily_bias=True applies the first-weak-point-break direction filter: only
-    trades that match the day's first break are taken (requires `times`, the
-    epoch-seconds timestamp of each bar).
+    daily_bias=True applies the weak-zone-break direction rule: a break arms the
+    direction of the NEXT entry only, and taking that entry spends it.
     """
     if zones is None:
         zones = detect_weak_zones(candles)
     models = models or list(MODELS)
 
-    bias_map = None
-    if daily_bias:
-        if times is None:
-            raise ValueError("daily_bias=True requires `times` (epoch seconds per bar)")
-        bias_map = first_break_bias(zones, times, anchor_hours)
+    breaks = break_events(zones) if daily_bias else {}
+    armed = None                                      # direction the next entry must take
 
     result = {m: {"win": 0, "loss": 0, "open": 0} for m in models}
     rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0}
@@ -217,6 +202,9 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     busy_until = -1                                   # bar index the open trade exits on
 
     for j in range(1, len(candles) - 1):
+        # a break on the previous bar arms the direction for the next entry
+        if daily_bias and (j - 1) in breaks:
+            armed = breaks[j - 1]
         c1, c2 = candles[j - 1], candles[j]
 
         for m in models:
@@ -228,12 +216,10 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                 break
 
             side = MODELS[m][1]
-            # daily first-break bias: skip trades against the day's direction
-            if bias_map is not None:
-                b = bias_side_at(bias_map, times, j, anchor_hours)
-                if b != 0 and side != b:
-                    rej["bias"] += 1
-                    break
+            # a zone break arms the next entry's direction; no armed break -> no trade
+            if daily_bias and (armed is None or side != armed):
+                rej["bias"] += 1
+                break
             if side > 0:
                 entry = c2[H] + entry_buffer
                 sl    = min(c1[L], c2[L]) - sl_buffer
@@ -269,6 +255,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                     outcome, exit_i = "win", k; break
             result[m][outcome] += 1
             busy_until = exit_i
+            armed = None                              # entry taken -> direction spent
             log.append({"model": m, "signal": j, "exit": exit_i,
                         "outcome": outcome, "R": R, "bars": exit_i - j})
             break                                     # one order per bar
