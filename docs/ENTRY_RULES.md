@@ -14,7 +14,7 @@ Consequences:
 |----------|------|------|
 | Risk on the trade | **1R** | by definition — the SL sits exactly 1R from entry |
 | Weak-zone clearance | **>= 2.5R** | entry to the zone's near edge, else no trade |
-| Target | **3R** | the "1:3 fixed" from p4 / p12 |
+| Target (TP) | **3R** | fixed at 3R for all four models — "1:3 fixed" (p4 / p12) |
 
 Worked example — entry 2650.00, SL 2642.00:
 
@@ -32,6 +32,7 @@ R = 8.30 points. Risk 8.30 to make 24.90.
 1. When the **2nd candle closes**, place **Entry and Stop Loss as pending orders**.
 2. The **3rd candle** is the only candle that may trigger the entry.
 3. If it has not triggered by the **close of the 3rd candle**, **cancel the order**.
+4. **Take profit = 3R**, fixed, for all four models.
 
 ## Weak-zone clearance check ✅ (applies to all 4 models)
 
@@ -64,6 +65,7 @@ trade can reach its target, so the setup is not worth taking.
 | Confirmation | 2nd candle must break the 1st candle's **low** | ✅ |
 | Orders | Placed at 2nd candle close, live for the 3rd candle only | ✅ |
 | Zone clearance | Entry to weak-zone low must be >= 2.5R, or no zone present | ✅ |
+| Take profit | 3R | ✅ |
 | Entry price | At the 2nd candle's high + buffer 0.100 + spread 0.200 = 0.3 point (from p6) | ❓ not yet confirmed |
 | Stop loss | Low of both candles + 0.3 spread + 7 point + 1 point per table = 8.3 (from p6) | ❓ not yet confirmed |
 
