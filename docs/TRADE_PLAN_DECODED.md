@@ -135,6 +135,22 @@ Lot examples re-confirm the formula: `50/12.05 → 0.04 lot`, `50/5 → 0.10 lot
 
 ---
 
+## The 2:3 target — the piece that reproduced the mentor's win rate
+
+p4 carries both "1:3 fixed" and **"Risk ⇒ 2:3"**. Read as *risk 2, reward 3*, the
+target sits at **1.5R** — one and a half times the stop distance — not 3R. That
+single change reproduces the mentor's win rate on both feeds:
+
+| target | spot win% | Delta win% | $100 on Delta (after fees) |
+|---|---|---|---|
+| 3R ("1:3") | 38.1% | 34.4% | $98.73 (**−1.3%**) |
+| **1.5R ("2:3")** | **61.9%** | **60.6%** | **$110.33 (+10.3%)** |
+| mentor | — | 59.3% | — |
+
+It also fixes the fee problem: a nearer target is hit far more often, so fewer
+trades bleed out to the stop, and max drawdown falls from 21.5% to 12.7%.
+`tp_r` now defaults to **1.5**.
+
 ## Backtest state after the full decode
 
 Spot XAUUSD (Dukascopy), p4 buffer table + break-arms-next-entry + 2.5R clearance:
