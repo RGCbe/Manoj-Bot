@@ -23,7 +23,8 @@
 indicator("Weak Zones (Manoj-Bot)", overlay = true, max_boxes_count = 500)
 
 // ---- inputs -----------------------------------------------------------------
-lookback    = input.int(4, "Anchor lookback (candles before the 1st)", minval = 0)
+lookback    = input.int(8, "Anchor lookback (candles before the 1st)", minval = 0)
+maxAgeBars  = input.int(192, "Zone lifetime in bars (192 = 2 days on 15m, 0 = forever)", minval = 0)
 allowDoji   = input.bool(false, "Allow a doji inside the 3-candle run")
 deathBuf    = input.float(0.0, "Death buffer (price beyond far edge)", minval = 0.0)
 extendRight = input.bool(true, "Extend live zones to the current bar")
@@ -44,6 +45,7 @@ var array<bool>  zSup   = array.new<bool>()    // true = support (3 green)
 var array<float> zTop   = array.new<float>()
 var array<float> zBot   = array.new<float>()
 var array<bool>  zAlive = array.new<bool>()
+var array<int>   zBorn  = array.new<int>()     // bar the zone formed on
 // Weak points alternate: 1 = last marked was a support, -1 = resistance, 0 = none
 var int lastSide = 0
 
@@ -64,7 +66,8 @@ if barstate.isconfirmed
 				zt    = array.get(zTop, i)
 				zb    = array.get(zBot, i)
 				b     = array.get(zBox, i)
-				died  = isSup ? (low < zb - deathBuf) : (high > zt + deathBuf)
+				aged  = maxAgeBars > 0 and (bar_index - array.get(zBorn, i)) >= maxAgeBars
+				died  = aged or (isSup ? (low < zb - deathBuf) : (high > zt + deathBuf))
 				if died
 					array.set(zAlive, i, false)
 					box.set_right(b, bar_index)
@@ -146,6 +149,7 @@ if barstate.isconfirmed
 				array.push(zTop, top)
 				array.push(zBot, bottom)
 				array.push(zAlive, true)
+				array.push(zBorn, bar_index)
 				lastSide := isGreen ? 1 : -1
 				if array.size(zBox) > maxZones
 					box.delete(array.shift(zBox))
@@ -153,6 +157,7 @@ if barstate.isconfirmed
 					array.shift(zTop)
 					array.shift(zBot)
 					array.shift(zAlive)
+					array.shift(zBorn)
 
 // keep live zones stretched to the developing bar
 if extendRight and array.size(zBox) > 0

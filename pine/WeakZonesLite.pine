@@ -10,7 +10,8 @@
 // Differences vs WeakZones.pine: keeps one zone per side (not a history), and
 // the band starts drawing at the formation candle rather than the extreme one.
 indicator('Weak Zones Lite (Manoj-Bot)', overlay = true)
-lookback = input.int(4, 'Anchor lookback (candles before the 1st)', minval = 0)
+lookback = input.int(8, 'Anchor lookback (candles before the 1st)', minval = 0)
+maxAgeBars = input.int(192, 'Zone lifetime in bars (192 = 2 days on 15m, 0 = forever)', minval = 0)
 deathBuf = input.float(0.0, 'Death buffer (price beyond far edge)', minval = 0.0)
 alternate = input.bool(true, 'Alternate sides (support -> resistance -> support)')
 minBodyPct = input.float(0.0, 'Min candle body (% of its range, 0 = off)', minval = 0.0, maxval = 100.0)
@@ -28,9 +29,13 @@ rawBear = barstate.isconfirmed and big3 and close < open and close[1] < open[1] 
 // (3 red), then a support again. lastSide: 1 = last marked was support,
 // -1 = resistance, 0 = none yet. Same-side formations are skipped.
 var int lastSide = 0
+var int supBorn = 0
+var int resBorn = 0
 bullForm = rawBull and (not alternate or lastSide != 1)
 bearForm = rawBear and (not alternate or lastSide != -1)
 lastSide := bullForm ? 1 : bearForm ? -1 : lastSide
+supBorn := bullForm ? bar_index : supBorn
+resBorn := bearForm ? bar_index : resBorn
 newSupBot = ta.lowest(low, w)
 newSupTop = ta.lowest(math.min(open, close), w)
 newResTop = ta.highest(high, w)
@@ -39,8 +44,10 @@ var float supTop = na
 var float supBot = na
 var float resTop = na
 var float resBot = na
-supDead = barstate.isconfirmed and not na(supBot) and low[1] < supBot - deathBuf
-resDead = barstate.isconfirmed and not na(resTop) and high[1] > resTop + deathBuf
+supAged = maxAgeBars > 0 and not na(supBot) and (bar_index - supBorn) >= maxAgeBars
+resAged = maxAgeBars > 0 and not na(resTop) and (bar_index - resBorn) >= maxAgeBars
+supDead = supAged or (barstate.isconfirmed and not na(supBot) and low[1] < supBot - deathBuf)
+resDead = resAged or (barstate.isconfirmed and not na(resTop) and high[1] > resTop + deathBuf)
 supTop := bullForm ? newSupTop : supDead ? na : supTop
 supBot := bullForm ? newSupBot : supDead ? na : supBot
 resTop := bearForm ? newResTop : resDead ? na : resTop

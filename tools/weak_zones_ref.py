@@ -45,8 +45,8 @@ def candle_color(c, min_body_pct=0.0):
     return 0
 
 
-def detect_weak_zones(candles, lookback=4, allow_doji=False, death_buffer=0.0,
-                      alternate=True, min_body_pct=0.0):
+def detect_weak_zones(candles, lookback=8, allow_doji=False, death_buffer=0.0,
+                      alternate=True, min_body_pct=0.0, max_age_bars=192):
     """Return the list of zones marked over `candles` (processed chronologically).
 
     With `alternate` (the default), weak points must alternate sides: a support
@@ -57,6 +57,10 @@ def detect_weak_zones(candles, lookback=4, allow_doji=False, death_buffer=0.0,
     `min_body_pct` rejects a formation containing an indecisive candle (a body
     smaller than that share of its high-low range). Set it to 0 to accept every
     formation.
+
+    `max_age_bars` expires a zone that has survived that many bars since it
+    formed - the plan keeps a zone valid for 2 days, which is 192 bars on the
+    15-minute chart. Set it to None for no expiry.
     """
     n = len(candles)
     zones = []
@@ -66,6 +70,12 @@ def detect_weak_zones(candles, lookback=4, allow_doji=False, death_buffer=0.0,
         # (a) age every live zone against bar j
         for z in zones:
             if not z["alive"] or j <= z["create_idx"]:
+                continue
+            if max_age_bars is not None and (j - z["create_idx"]) >= max_age_bars:
+                z["right_idx"] = j
+                z["alive"] = False
+                z["death_idx"] = j
+                z["expired"] = True
                 continue
             if z["is_support"]:
                 died = candles[j][L] < z["bottom"] - death_buffer
@@ -136,7 +146,7 @@ def detect_weak_zones(candles, lookback=4, allow_doji=False, death_buffer=0.0,
             "is_support": is_green,
             "top": top, "bottom": bottom,
             "left_idx": ext, "create_idx": c3, "right_idx": c3,   # box starts at the lowest/highest candle
-            "alive": True, "death_idx": None,
+            "alive": True, "death_idx": None, "expired": False,
         })
         last_side = is_green
 

@@ -25,10 +25,11 @@
 #property indicator_plots 0
 
 //--- inputs -------------------------------------------------------------------
-input int    InpAnchorLookback   = 4;            // Candles before the 1st candle to include in the anchor
+input int    InpAnchorLookback   = 8;            // Candles before the 1st candle to include in the anchor
 input bool   InpAllowDoji        = false;        // Allow a doji (open==close) inside the 3-candle run
 input int    InpDeathBufferPts   = 0;            // Extra points past the far edge required to call it DEAD (0 = exact)
 input int    InpMaxZones         = 60;           // Max zones kept on the chart
+input int    InpZoneLifeBars     = 192;         // Zone lifetime in bars (192 = 2 days on 15m, 0 = forever)
 input bool   InpAlternate        = true;         // Alternate sides (support -> resistance -> support)
 input double InpMinBodyPct       = 0.0;          // Min candle body as % of its range (0 = off)
 input bool   InpExtendRight      = true;         // Stretch live zones to the current bar
@@ -47,6 +48,7 @@ struct Zone
    double   bottom;      // lower price of the band
    datetime leftTime;    // left edge (anchor bar)
    datetime rightTime;   // right edge (grows while live, frozen on death)
+   int      bornBar;     // shift the zone formed on, for the lifetime check
    bool     alive;
 };
 
@@ -152,8 +154,10 @@ void ProcessBar(const int b,
    {
       if(!g_zones[i].alive) continue;
 
-      bool died = g_zones[i].isSupport ? (low[b]  < g_zones[i].bottom - buf)   // fully below the band
-                                       : (high[b] > g_zones[i].top    + buf);  // fully above the band
+      // a zone also expires once it has lived InpZoneLifeBars bars
+      bool aged = (InpZoneLifeBars > 0 && (g_zones[i].bornBar - b) >= InpZoneLifeBars);
+      bool died = aged || (g_zones[i].isSupport ? (low[b]  < g_zones[i].bottom - buf)
+                                                : (high[b] > g_zones[i].top    + buf));
       g_zones[i].rightTime = time[b];
       if(died)
          g_zones[i].alive = false;
@@ -237,6 +241,7 @@ void ProcessBar(const int b,
    z.leftTime  = time[extremeIdx];   // box starts at the lowest/highest candle
    z.rightTime = time[c3];
    z.alive     = true;
+   z.bornBar   = c3;
    z.name      = InpPrefix + (isGreen ? "S_" : "R_") + IntegerToString((long)time[c3]);
    AddZone(z);
    g_lastSide = isGreen ? 1 : -1;

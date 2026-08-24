@@ -34,6 +34,12 @@ R = 8.30 points. Risk 8.30 to make 24.90.
 3. If it has not triggered by the **close of the 3rd candle**, **cancel the order**.
 4. **Take profit = 3R**, fixed, for all four models.
 
+## Weak-zone marking ✅ (updated)
+
+- **Anchor lookback: 8 candles** before the 1st candle of the formation.
+- **Zones expire after 2 days** — 192 bars on the 15-minute chart. A zone that
+  has neither been broken nor expired stays live.
+
 ## Weak-zone clearance check ✅ (applies to all 4 models)
 
 Run this **after** the stop loss is calculated, since it is measured in R:

@@ -31,7 +31,10 @@ is followed by a resistance from 3 red, then a support again. A formation on the
 same side as the last marked zone is **skipped**. This is what keeps the marks on
 the actual swing turns (on 4 days of BTC 15m it takes 45 zones down to 24).
 
-**4. Live / Dead** — the zone stays **LIVE** while price only *touches into* the
+**4. Lifetime** — a zone is valid for **2 days** (192 bars on the 15-minute
+chart); after that it expires even if it was never broken.
+
+**5. Live / Dead** — the zone stays **LIVE** while price only *touches into* the
 band. It **DIES** the moment a **wick _or_ body fully breaks through the far
 edge** (below a support / above a resistance). On death the box **stops** (right
 edge frozen) and turns grey/dotted.
@@ -75,12 +78,13 @@ stops. Point the same `detect_weak_zones()` at your own OHLC data to check it.
 
 | Input | Default | What it does |
 |-------|---------|--------------|
-| `lookback` / `InpAnchorLookback` | `4` | Candles before the 1st candle to include when finding the nearest low/high. `4` was chosen by matching a hand-marked zone on real BTC 15m data (see below); raise it to reach a deeper swing. |
+| `lookback` / `InpAnchorLookback` | `8` | Candles before the 1st candle to include when finding the nearest low/high. `4` was chosen by matching a hand-marked zone on real BTC 15m data (see below); raise it to reach a deeper swing. |
 | `allowDoji` / `InpAllowDoji` | `false` | Whether a doji may sit inside the 3-candle run |
 | `minBodyPct` / `InpMinBodyPct` | `0` (off) | Optional: reject a formation containing an indecisive candle (body smaller than this share of its high-low range). Off by default — the rule as written counts every valid formation. |
 | `deathBuf` / `InpDeathBufferPts` | `0` | Extra distance past the far edge before the zone is called dead (filters tiny stop-hunt wicks). `0` = exact rule. |
 | `alternate` / `InpAlternate` | `true` | Require weak points to alternate support → resistance → support. Turn off to mark every valid formation. |
 | `extendRight` / `InpExtendRight` | `true` | Stretch live zones to the current bar |
+| `maxAgeBars` / `InpZoneLifeBars` | `192` | Zone lifetime in bars — 192 is 2 days on the 15-minute chart. `0` = never expires. |
 | `maxZones` / `InpMaxZones` | `60` | Cap on how many zones stay on the chart |
 
 ## Notes / assumptions
