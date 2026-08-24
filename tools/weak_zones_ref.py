@@ -46,7 +46,7 @@ def candle_color(c, min_body_pct=0.0):
 
 
 def detect_weak_zones(candles, lookback=4, allow_doji=False, death_buffer=0.0,
-                      alternate=True, min_body_pct=15.0):
+                      alternate=True, min_body_pct=0.0):
     """Return the list of zones marked over `candles` (processed chronologically).
 
     With `alternate` (the default), weak points must alternate sides: a support

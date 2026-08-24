@@ -30,7 +30,7 @@ input bool   InpAllowDoji        = false;        // Allow a doji (open==close) i
 input int    InpDeathBufferPts   = 0;            // Extra points past the far edge required to call it DEAD (0 = exact)
 input int    InpMaxZones         = 60;           // Max zones kept on the chart
 input bool   InpAlternate        = true;         // Alternate sides (support -> resistance -> support)
-input double InpMinBodyPct       = 15.0;         // Min candle body as % of its range (0 = off)
+input double InpMinBodyPct       = 0.0;          // Min candle body as % of its range (0 = off)
 input bool   InpExtendRight      = true;         // Stretch live zones to the current bar
 input bool   InpFill             = true;         // Fill live zones
 input color  InpSupportColor     = clrLimeGreen; // Live support (from 3 green)

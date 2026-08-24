@@ -13,7 +13,7 @@ indicator('Weak Zones Lite (Manoj-Bot)', overlay = true)
 lookback = input.int(4, 'Anchor lookback (candles before the 1st)', minval = 0)
 deathBuf = input.float(0.0, 'Death buffer (price beyond far edge)', minval = 0.0)
 alternate = input.bool(true, 'Alternate sides (support -> resistance -> support)')
-minBodyPct = input.float(15.0, 'Min candle body (% of its range)', minval = 0.0, maxval = 100.0)
+minBodyPct = input.float(0.0, 'Min candle body (% of its range, 0 = off)', minval = 0.0, maxval = 100.0)
 supFillC = input.color(color.new(color.green, 72), 'Support zone fill')
 resFillC = input.color(color.new(color.red, 72), 'Resistance zone fill')
 w = 3 + lookback

@@ -29,7 +29,7 @@ deathBuf    = input.float(0.0, "Death buffer (price beyond far edge)", minval = 
 extendRight = input.bool(true, "Extend live zones to the current bar")
 maxZones    = input.int(60, "Max zones kept", minval = 1)
 alternate   = input.bool(true, "Alternate sides (support -> resistance -> support)")
-minBodyPct  = input.float(15.0, "Min candle body (% of its range)", minval = 0.0, maxval = 100.0)
+minBodyPct  = input.float(0.0, "Min candle body (% of its range, 0 = off)", minval = 0.0, maxval = 100.0)
 
 supFill   = input.color(color.new(color.lime, 82), "Live support fill",    group = "Colours")
 resFill   = input.color(color.new(color.red,  82), "Live resistance fill", group = "Colours")
