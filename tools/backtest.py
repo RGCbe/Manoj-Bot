@@ -2,20 +2,21 @@
 """
 backtest.py - tests the entry models against real candles.
 
-CONFIRMED (docs/ENTRY_RULES.md), applies to all four models:
+All four models, confirmed against the full plan (docs/TRADE_PLAN_DECODED.md):
   * orders placed when the 2nd candle closes; the 3rd candle is the only candle
-    that may trigger them; not triggered by its close -> cancel
-  * R = |entry - SL|, risk 1R, take profit 3R
-  * entry to the nearest live opposing zone must be >= 2.5R, or no zone at all
-  * Model 1 (Bullish Engulfing): 1st red, 2nd green, 1st BODY inside 2nd BODY,
-    2nd candle breaks the 1st candle's LOW
+    that may trigger them; not triggered by its close -> cancel        (p6, p10)
+  * body-to-body containment, wicks ignored                            (p2)
+  * the 2nd candle must break the 1st candle's low (bull) / high (bear)(p9)
+  * entry = 2nd candle's extreme + 0.100 buffer + broker spread        (p6, p7)
+  * SL    = opposite extreme across both candles -/+ a buffer that scales with
+    the raw stop distance (SL_BUFFER_TABLE)                            (p4, p6)
+  * R = |entry - SL|, risk 1R, take profit 3R fixed                    (p4, p12)
+  * entry to the nearest live opposing zone must be >= 2.5R, or no zone (p4, p12)
+  * a weak-zone break arms the direction of the NEXT ENTRY only        (p10)
+  * "3 to 4 candle no break" -> close at entry, cost to cost           (p11, p12)
 
-ASSUMED - not yet confirmed:
-  * entry price = the 2nd candle's extreme in the trade direction (+/- buffer)
-  * stop loss   = the opposite extreme across both candles (-/+ buffer)
-  * models 2-4 mirror model 1; Harami reverses the containment (2nd body inside
-    the 1st body) and, per p9, the 2nd candle still breaks the 1st candle's
-    low (bull) / high (bear)
+Open: the session window ("market time 6 to 10.30", p2) currently costs win rate
+rather than adding it - see docs/TRADE_PLAN_DECODED.md.
 """
 
 from __future__ import annotations
@@ -199,7 +200,7 @@ def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
 def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                    min_zone_r=2.5, tp_r=3.0, zones=None,
                    times=None, daily_bias=False, anchor_hours=4,
-                   use_sl_table=False):
+                   use_sl_table=False, c2c_bars=None, c2c_progress_r=1.0):
     """Walk the candles in order, holding at most one position.
 
     While a trade is open no new order is placed, so signals that appear during
@@ -216,7 +217,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     breaks = break_events(zones) if daily_bias else {}
     armed = None                                      # direction the next entry must take
 
-    result = {m: {"win": 0, "loss": 0, "open": 0} for m in models}
+    result = {m: {"win": 0, "loss": 0, "open": 0, "breakeven": 0} for m in models}
     rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0}
     log = []
     busy_until = -1                                   # bar index the open trade exits on
@@ -268,6 +269,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
 
             tp = entry + side * tp_r * R
             outcome, exit_i = "open", len(candles) - 1
+            fill_i = j + 1
             for k in range(j + 1, len(candles)):
                 b = candles[k]
                 if side > 0:
@@ -278,6 +280,14 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                     outcome, exit_i = "loss", k; break
                 if hit_tp:
                     outcome, exit_i = "win", k; break
+                # p11/p12: "3 to 4 candle no break -> cost to cost".
+                # Not through by then -> close at entry instead of risking the stop.
+                if c2c_bars and (k - fill_i) >= c2c_bars:
+                    best = (max(candles[i][H] for i in range(fill_i, k + 1)) if side > 0
+                            else min(candles[i][L] for i in range(fill_i, k + 1)))
+                    moved = (best - entry) / R if side > 0 else (entry - best) / R
+                    if moved < c2c_progress_r:
+                        outcome, exit_i = "breakeven", k; break
             result[m][outcome] += 1
             busy_until = exit_i
             armed = None                              # entry taken -> direction spent
@@ -291,17 +301,19 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
 def report(result, rej, title, tp_r=3.0):
     lines = [title, "-" * len(title)]
     lines.append(f"{'model':<20}{'trades':>8}{'wins':>7}{'loss':>7}{'win%':>8}{'netR':>9}")
-    TW = TL = 0
+    TW = TL = TB = 0
     for m, t in result.items():
-        w, l = t["win"], t["loss"]
-        TW += w; TL += l
-        n = w + l
-        wr = w / n * 100 if n else 0.0
+        w, l, b = t["win"], t["loss"], t.get("breakeven", 0)
+        TW += w; TL += l; TB += b
+        n = w + l + b
+        wr = w / (w + l) * 100 if (w + l) else 0.0
         lines.append(f"{MODELS[m][0]:<20}{n:>8}{w:>7}{l:>7}{wr:>7.1f}%{w*tp_r-l:>+8.0f}R")
-    n = TW + TL
-    wr = TW / n * 100 if n else 0.0
+    n = TW + TL + TB
+    wr = TW / (TW + TL) * 100 if (TW + TL) else 0.0
     lines.append("-" * 59)
     lines.append(f"{'TOTAL':<20}{n:>8}{TW:>7}{TL:>7}{wr:>7.1f}%{TW*tp_r-TL:>+8.0f}R")
+    if TB:
+        lines.append(f"cost-to-cost breakevens   : {TB}   (win% excludes them)")
     lines.append(f"skipped - trade already open: {rej['busy']}")
     lines.append(f"skipped - zone too close    : {rej['zone']}")
     lines.append(f"skipped - never triggered   : {rej['no_fill']}")
