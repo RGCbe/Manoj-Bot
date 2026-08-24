@@ -85,6 +85,31 @@ Not yet reviewed.
   break the 1st candle's low/high?
 - Do these patterns only fire **at a weak zone**, or anywhere on the chart?
 
+## Session filter — strong evidence, needs confirming
+
+The plan says "market time 6 to 10:30" (p2) but never states the timezone.
+Tested against a known data point: the mentor took **16 trades on gold in
+August**. Counting the bot's August gold trades inside a 06:00-10:30 window
+under different timezones:
+
+| Window timezone | Aug trades |
+|---|---|
+| UTC | 9 |
+| **IST (UTC+5:30)** | **16** |
+| New York | 8 |
+| London | 10 |
+| Dubai | 15 |
+| Tokyo | 7 |
+
+**IST reproduces the count exactly**, and it is the trader's own timezone. That
+is good evidence the window is 06:00-10:30 IST, though a matching count is not
+proof on its own.
+
+Caveat: those 16 trades come out 1 win / 15 losses, which a mentor teaching the
+method would not have produced. So the session filter looks right while the
+entry/SL/exit rules still are not - the missing pieces (cost-to-cost, the p6/p7
+buffers, the p11 NOT TRADE conditions) must change the outcomes substantially.
+
 ## Conditions still to cover
 
 The plan has many more conditions (p11 "NOT TRADE", p12 rules focus, 1:3 target,
