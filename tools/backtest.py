@@ -143,3 +143,98 @@ def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
                 outcome = "win"; break
         trades[outcome] += 1
     return trades, rej
+
+
+# --------------------------------------------------------------------------- #
+#  Sequential engine - CONFIRMED: only one trade at a time.
+#  A new order is only placed once the previous trade has closed.
+# --------------------------------------------------------------------------- #
+def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
+                   min_zone_r=2.5, tp_r=3.0, zones=None):
+    """Walk the candles in order, holding at most one position.
+
+    While a trade is open no new order is placed, so signals that appear during
+    it are skipped. When several models signal on the same bar the first one
+    listed wins.
+    """
+    if zones is None:
+        zones = detect_weak_zones(candles)
+    models = models or list(MODELS)
+
+    result = {m: {"win": 0, "loss": 0, "open": 0} for m in models}
+    rej = {"zone": 0, "no_fill": 0, "busy": 0}
+    log = []
+    busy_until = -1                                   # bar index the open trade exits on
+
+    for j in range(1, len(candles) - 1):
+        c1, c2 = candles[j - 1], candles[j]
+
+        for m in models:
+            if not detect(m, c1, c2):
+                continue
+            # an order may only be placed when nothing is open
+            if j + 1 <= busy_until:
+                rej["busy"] += 1
+                break
+
+            side = MODELS[m][1]
+            if side > 0:
+                entry = c2[H] + entry_buffer
+                sl    = min(c1[L], c2[L]) - sl_buffer
+            else:
+                entry = c2[L] - entry_buffer
+                sl    = max(c1[H], c2[H]) + sl_buffer
+            R = abs(entry - sl)
+            if R <= 0:
+                break
+
+            ok, _ = zone_clearance_ok(zones, j, entry, R, side, min_zone_r)
+            if not ok:
+                rej["zone"] += 1
+                break
+
+            third = candles[j + 1]
+            filled = third[H] >= entry if side > 0 else third[L] <= entry
+            if not filled:
+                rej["no_fill"] += 1
+                break
+
+            tp = entry + side * tp_r * R
+            outcome, exit_i = "open", len(candles) - 1
+            for k in range(j + 1, len(candles)):
+                b = candles[k]
+                if side > 0:
+                    hit_sl, hit_tp = b[L] <= sl, b[H] >= tp
+                else:
+                    hit_sl, hit_tp = b[H] >= sl, b[L] <= tp
+                if hit_sl:
+                    outcome, exit_i = "loss", k; break
+                if hit_tp:
+                    outcome, exit_i = "win", k; break
+            result[m][outcome] += 1
+            busy_until = exit_i
+            log.append({"model": m, "signal": j, "exit": exit_i,
+                        "outcome": outcome, "R": R, "bars": exit_i - j})
+            break                                     # one order per bar
+
+    return result, rej, log
+
+
+def report(result, rej, title, tp_r=3.0):
+    lines = [title, "-" * len(title)]
+    lines.append(f"{'model':<20}{'trades':>8}{'wins':>7}{'loss':>7}{'win%':>8}{'netR':>9}")
+    TW = TL = 0
+    for m, t in result.items():
+        w, l = t["win"], t["loss"]
+        TW += w; TL += l
+        n = w + l
+        wr = w / n * 100 if n else 0.0
+        lines.append(f"{MODELS[m][0]:<20}{n:>8}{w:>7}{l:>7}{wr:>7.1f}%{w*tp_r-l:>+8.0f}R")
+    n = TW + TL
+    wr = TW / n * 100 if n else 0.0
+    lines.append("-" * 59)
+    lines.append(f"{'TOTAL':<20}{n:>8}{TW:>7}{TL:>7}{wr:>7.1f}%{TW*tp_r-TL:>+8.0f}R")
+    lines.append(f"skipped - trade already open: {rej['busy']}")
+    lines.append(f"skipped - zone too close    : {rej['zone']}")
+    lines.append(f"skipped - never triggered   : {rej['no_fill']}")
+    return "\n".join(lines)
