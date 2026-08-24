@@ -135,21 +135,19 @@ Lot examples re-confirm the formula: `50/12.05 → 0.04 lot`, `50/5 → 0.10 lot
 
 ---
 
-## The 2:3 target — the piece that reproduced the mentor's win rate
+## Target: TP = 3R ✅ (confirmed)
 
-p4 carries both "1:3 fixed" and **"Risk ⇒ 2:3"**. Read as *risk 2, reward 3*, the
-target sits at **1.5R** — one and a half times the stop distance — not 3R. That
-single change reproduces the mentor's win rate on both feeds:
+The take profit sits at **three times R** — R being the entry-to-stop distance.
+`tp_r = 3.0`.
 
-| target | spot win% | Delta win% | $100 on Delta (after fees) |
-|---|---|---|---|
-| 3R ("1:3") | 38.1% | 34.4% | $98.73 (**−1.3%**) |
-| **1.5R ("2:3")** | **61.9%** | **60.6%** | **$110.33 (+10.3%)** |
-| mentor | — | 59.3% | — |
+A "2:3" reading (target at 1.5R) was tried because p4 carries both "1:3 fixed"
+and "Risk => 2:3", and it happened to reproduce the mentor's win rate almost
+exactly (61.9% spot / 60.6% Delta vs his 59.3%). **That was wrong** — confirmed
+directly: the TP distance is 3R. The match was coincidence, and a caution against
+inferring a rule from how well it fits a target number.
 
-It also fixes the fee problem: a nearer target is hit far more often, so fewer
-trades bleed out to the stop, and max drawdown falls from 21.5% to 12.7%.
-`tp_r` now defaults to **1.5**.
+The 2 in "2:3" therefore refers to something other than the target distance
+(most likely the 2% risk of p4's risk table), not a 1.5R take profit.
 
 ## Backtest state after the full decode
 

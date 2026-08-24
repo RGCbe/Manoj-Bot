@@ -10,9 +10,8 @@ All four models, confirmed against the full plan (docs/TRADE_PLAN_DECODED.md):
   * entry = 2nd candle's extreme + 0.100 buffer + broker spread        (p6, p7)
   * SL    = opposite extreme across both candles -/+ a buffer that scales with
     the raw stop distance (SL_BUFFER_TABLE)                            (p4, p6)
-  * R = |entry - SL|. Target is the 2:3 ratio from p4 - risk 2, reward 3 -
-    i.e. TP sits at 1.5R, NOT 3R. This is what reproduces the mentor's win
-    rate (61.9% on spot / 60.6% on Delta vs his 59.3%).            (p4 "Risk => 2:3")
+  * R = |entry - SL|, risk 1R, take profit 3R - the TP distance is three
+    times R                                                         (p4, p12)
   * entry to the nearest live opposing zone must be >= 2.5R, or no zone (p4, p12)
   * a weak-zone break arms the direction of the NEXT ENTRY only        (p10)
   * "3 to 4 candle no break" -> close at entry, cost to cost           (p11, p12)
@@ -200,7 +199,7 @@ def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
 #  A new order is only placed once the previous trade has closed.
 # --------------------------------------------------------------------------- #
 def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
-                   min_zone_r=2.5, tp_r=1.5, zones=None,
+                   min_zone_r=2.5, tp_r=3.0, zones=None,
                    times=None, daily_bias=False, anchor_hours=4,
                    use_sl_table=False, c2c_bars=None, c2c_progress_r=1.0):
     """Walk the candles in order, holding at most one position.
