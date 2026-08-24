@@ -36,10 +36,18 @@ def candle_color(c):
     return 0
 
 
-def detect_weak_zones(candles, lookback=2, allow_doji=False, death_buffer=0.0):
-    """Return the list of zones marked over `candles` (processed chronologically)."""
+def detect_weak_zones(candles, lookback=2, allow_doji=False, death_buffer=0.0,
+                      alternate=True):
+    """Return the list of zones marked over `candles` (processed chronologically).
+
+    With `alternate` (the default), weak points must alternate sides: a support
+    marked from 3 green candles is followed by a resistance from 3 red, then a
+    support again, and so on. Consecutive formations on the same side are
+    skipped, which is what keeps the count down to the swing turns.
+    """
     n = len(candles)
     zones = []
+    last_side = None          # True = last marked zone was a support
 
     for j in range(n):
         # (a) age every live zone against bar j
@@ -78,6 +86,10 @@ def detect_weak_zones(candles, lookback=2, allow_doji=False, death_buffer=0.0):
 
         is_green = (sign == 1)
 
+        # weak points alternate: a support is followed by a resistance, and back
+        if alternate and last_side is not None and last_side == is_green:
+            continue
+
         # each candle breaks the previous
         if is_green:
             breaks = candles[c2][H] > candles[c1][H] and candles[c3][H] > candles[c2][H]
@@ -113,6 +125,7 @@ def detect_weak_zones(candles, lookback=2, allow_doji=False, death_buffer=0.0):
             "left_idx": ext, "create_idx": c3, "right_idx": c3,   # box starts at the lowest/highest candle
             "alive": True, "death_idx": None,
         })
+        last_side = is_green
 
     return zones
 

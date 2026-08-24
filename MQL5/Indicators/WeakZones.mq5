@@ -29,6 +29,7 @@ input int    InpAnchorLookback   = 2;            // Candles before the 1st candl
 input bool   InpAllowDoji        = false;        // Allow a doji (open==close) inside the 3-candle run
 input int    InpDeathBufferPts   = 0;            // Extra points past the far edge required to call it DEAD (0 = exact)
 input int    InpMaxZones         = 60;           // Max zones kept on the chart
+input bool   InpAlternate        = true;         // Alternate sides (support -> resistance -> support)
 input bool   InpExtendRight      = true;         // Stretch live zones to the current bar
 input bool   InpFill             = true;         // Fill live zones
 input color  InpSupportColor     = clrLimeGreen; // Live support (from 3 green)
@@ -50,12 +51,15 @@ struct Zone
 
 Zone     g_zones[];
 datetime g_lastBar = 0;
+// Weak points alternate: 1 = last marked was a support, -1 = resistance, 0 = none
+int      g_lastSide = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
 {
    ArrayResize(g_zones,0);
    g_lastBar = 0;
+   g_lastSide = 0;
    ObjectsDeleteAll(0,InpPrefix);
    return(INIT_SUCCEEDED);
 }
@@ -92,6 +96,7 @@ int OnCalculate(const int rates_total,
    {
       ObjectsDeleteAll(0,InpPrefix);
       ArrayResize(g_zones,0);
+      g_lastSide = 0;
       for(int bar = rates_total - 1; bar >= 1; bar--)
          ProcessBar(bar, time, open, high, low, close, rates_total);
       g_lastBar = time[0];
@@ -179,6 +184,9 @@ void ProcessBar(const int b,
                          : (low[c2]  < low[c1]  && low[c3]  < low[c2]);
    if(!breaks) return;
 
+   // weak points alternate: a support is followed by a resistance, and back
+   if(InpAlternate && g_lastSide == (isGreen ? 1 : -1)) return;
+
    //--- build the band from the anchor window -----------------------------
    //    (extremeIdx = the lowest / highest candle; the box starts there)
    double top, bottom;
@@ -225,6 +233,7 @@ void ProcessBar(const int b,
    z.alive     = true;
    z.name      = InpPrefix + (isGreen ? "S_" : "R_") + IntegerToString((long)time[c3]);
    AddZone(z);
+   g_lastSide = isGreen ? 1 : -1;
    DrawZone(z);
 }
 

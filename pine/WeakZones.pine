@@ -28,6 +28,7 @@ allowDoji   = input.bool(false, "Allow a doji inside the 3-candle run")
 deathBuf    = input.float(0.0, "Death buffer (price beyond far edge)", minval = 0.0)
 extendRight = input.bool(true, "Extend live zones to the current bar")
 maxZones    = input.int(60, "Max zones kept", minval = 1)
+alternate   = input.bool(true, "Alternate sides (support -> resistance -> support)")
 
 supFill   = input.color(color.new(color.lime, 82), "Live support fill",    group = "Colours")
 resFill   = input.color(color.new(color.red,  82), "Live resistance fill", group = "Colours")
@@ -42,6 +43,8 @@ var array<bool>  zSup   = array.new<bool>()    // true = support (3 green)
 var array<float> zTop   = array.new<float>()
 var array<float> zBot   = array.new<float>()
 var array<bool>  zAlive = array.new<bool>()
+// Weak points alternate: 1 = last marked was a support, -1 = resistance, 0 = none
+var int lastSide = 0
 
 // candle colour at a history offset: 1 = green, -1 = red, 0 = doji
 cColor(offset) => close[offset] > open[offset] ? 1 : close[offset] < open[offset] ? -1 : 0
@@ -98,7 +101,8 @@ if barstate.isconfirmed
 	if valid and bar_index > wEnd
 		isGreen = sign == 1
 		breaks  = isGreen ? (high[1] > high[2] and high[0] > high[1]) : (low[1] < low[2] and low[0] < low[1])
-		if breaks
+		sideOk  = not alternate or lastSide != (isGreen ? 1 : -1)
+		if breaks and sideOk
 			float top    = na
 			float bottom = na
 			int   extreme = 0          // offset of the lowest / highest candle
@@ -139,6 +143,7 @@ if barstate.isconfirmed
 				array.push(zTop, top)
 				array.push(zBot, bottom)
 				array.push(zAlive, true)
+				lastSide := isGreen ? 1 : -1
 				if array.size(zBox) > maxZones
 					box.delete(array.shift(zBox))
 					array.shift(zSup)

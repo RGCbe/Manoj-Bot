@@ -26,7 +26,12 @@ The box **starts at the lowest candle** (support) / **highest candle**
 (resistance) — the wick candle itself — and **ends at the candle that breaks
 it**.
 
-**3. Live / Dead** — the zone stays **LIVE** while price only *touches into* the
+**3. Alternating sides** — weak points alternate: a support marked from 3 green
+is followed by a resistance from 3 red, then a support again. A formation on the
+same side as the last marked zone is **skipped**. This is what keeps the marks on
+the actual swing turns (on 4 days of BTC 15m it takes 45 zones down to 24).
+
+**4. Live / Dead** — the zone stays **LIVE** while price only *touches into* the
 band. It **DIES** the moment a **wick _or_ body fully breaks through the far
 edge** (below a support / above a resistance). On death the box **stops** (right
 edge frozen) and turns grey/dotted.
@@ -73,6 +78,7 @@ stops. Point the same `detect_weak_zones()` at your own OHLC data to check it.
 | `lookback` / `InpAnchorLookback` | `2` | Candles before the 1st candle to include when finding the nearest low/high. Raise it to anchor to a nearer/deeper swing. |
 | `allowDoji` / `InpAllowDoji` | `false` | Whether a doji may sit inside the 3-candle run |
 | `deathBuf` / `InpDeathBufferPts` | `0` | Extra distance past the far edge before the zone is called dead (filters tiny stop-hunt wicks). `0` = exact rule. |
+| `alternate` / `InpAlternate` | `true` | Require weak points to alternate support → resistance → support. Turn off to mark every valid formation. |
 | `extendRight` / `InpExtendRight` | `true` | Stretch live zones to the current bar |
 | `maxZones` / `InpMaxZones` | `60` | Cap on how many zones stay on the chart |
 
