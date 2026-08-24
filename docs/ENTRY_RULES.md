@@ -85,30 +85,31 @@ Not yet reviewed.
   break the 1st candle's low/high?
 - Do these patterns only fire **at a weak zone**, or anywhere on the chart?
 
-## Session filter — strong evidence, needs confirming
+## Benchmark: the mentor's August on gold
 
-The plan says "market time 6 to 10:30" (p2) but never states the timezone.
-Tested against a known data point: the mentor took **16 trades on gold in
-August**. Counting the bot's August gold trades inside a 06:00-10:30 window
-under different timezones:
+| | trades | wins | losses | win rate | net |
+|---|---|---|---|---|---|
+| **Mentor** | 27 | 16 | 11 | **59.3%** | **+37R** |
+| Bot (current rules) | 57 | 10 | 47 | 17.5% | -17R |
 
-| Window timezone | Aug trades |
-|---|---|
-| UTC | 9 |
-| **IST (UTC+5:30)** | **16** |
-| New York | 8 |
-| London | 10 |
-| Dubai | 15 |
-| Tokyo | 7 |
+This is the target to reproduce. The gap is not a tuning gap - a 59% win rate
+at 1:3 is a different system from what is currently implemented, and no session
+window, SL buffer or target setting tested so far gets close to both the trade
+count and the win rate at once.
 
-**IST reproduces the count exactly**, and it is the trader's own timezone. That
-is good evidence the window is 06:00-10:30 IST, though a matching count is not
-proof on its own.
+An earlier note here claimed a 06:00-10:30 IST window reproduced the mentor's
+count. That was wrong: the 16 was the mentor's **wins**, not the total. Session
+windows tested against the real target of 27 trades:
 
-Caveat: those 16 trades come out 1 win / 15 losses, which a mentor teaching the
-method would not have produced. So the session filter looks right while the
-entry/SL/exit rules still are not - the missing pieces (cost-to-cost, the p6/p7
-buffers, the p11 NOT TRADE conditions) must change the outcomes substantially.
+| Window timezone | Aug trades | win rate |
+|---|---|---|
+| UTC | 9 | 33.3% |
+| IST (UTC+5:30) | 16 | 6.2% |
+| London | 10 | 30.0% |
+| New York | 8 | 12.5% |
+| Tokyo | 7 | 42.9% |
+
+None land near 27 trades at 59%.
 
 ## Conditions still to cover
 
