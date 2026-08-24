@@ -25,7 +25,7 @@
 #property indicator_plots 0
 
 //--- inputs -------------------------------------------------------------------
-input int    InpAnchorLookback   = 2;            // Candles before the 1st candle to include in the anchor
+input int    InpAnchorLookback   = 4;            // Candles before the 1st candle to include in the anchor
 input bool   InpAllowDoji        = false;        // Allow a doji (open==close) inside the 3-candle run
 input int    InpDeathBufferPts   = 0;            // Extra points past the far edge required to call it DEAD (0 = exact)
 input int    InpMaxZones         = 60;           // Max zones kept on the chart

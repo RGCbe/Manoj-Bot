@@ -36,7 +36,7 @@ def candle_color(c):
     return 0
 
 
-def detect_weak_zones(candles, lookback=2, allow_doji=False, death_buffer=0.0,
+def detect_weak_zones(candles, lookback=4, allow_doji=False, death_buffer=0.0,
                       alternate=True):
     """Return the list of zones marked over `candles` (processed chronologically).
 

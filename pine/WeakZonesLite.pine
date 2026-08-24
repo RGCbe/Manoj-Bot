@@ -10,7 +10,7 @@
 // Differences vs WeakZones.pine: keeps one zone per side (not a history), and
 // the band starts drawing at the formation candle rather than the extreme one.
 indicator('Weak Zones Lite (Manoj-Bot)', overlay = true)
-lookback = input.int(2, 'Anchor lookback (candles before the 1st)', minval = 0)
+lookback = input.int(4, 'Anchor lookback (candles before the 1st)', minval = 0)
 deathBuf = input.float(0.0, 'Death buffer (price beyond far edge)', minval = 0.0)
 alternate = input.bool(true, 'Alternate sides (support -> resistance -> support)')
 supFillC = input.color(color.new(color.green, 72), 'Support zone fill')

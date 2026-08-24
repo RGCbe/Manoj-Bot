@@ -23,7 +23,7 @@
 indicator("Weak Zones (Manoj-Bot)", overlay = true, max_boxes_count = 500)
 
 // ---- inputs -----------------------------------------------------------------
-lookback    = input.int(2, "Anchor lookback (candles before the 1st)", minval = 0)
+lookback    = input.int(4, "Anchor lookback (candles before the 1st)", minval = 0)
 allowDoji   = input.bool(false, "Allow a doji inside the 3-candle run")
 deathBuf    = input.float(0.0, "Death buffer (price beyond far edge)", minval = 0.0)
 extendRight = input.bool(true, "Extend live zones to the current bar")

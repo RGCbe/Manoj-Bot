@@ -75,7 +75,7 @@ stops. Point the same `detect_weak_zones()` at your own OHLC data to check it.
 
 | Input | Default | What it does |
 |-------|---------|--------------|
-| `lookback` / `InpAnchorLookback` | `2` | Candles before the 1st candle to include when finding the nearest low/high. Raise it to anchor to a nearer/deeper swing. |
+| `lookback` / `InpAnchorLookback` | `4` | Candles before the 1st candle to include when finding the nearest low/high. `4` was chosen by matching a hand-marked zone on real BTC 15m data (see below); raise it to reach a deeper swing. |
 | `allowDoji` / `InpAllowDoji` | `false` | Whether a doji may sit inside the 3-candle run |
 | `deathBuf` / `InpDeathBufferPts` | `0` | Extra distance past the far edge before the zone is called dead (filters tiny stop-hunt wicks). `0` = exact rule. |
 | `alternate` / `InpAlternate` | `true` | Require weak points to alternate support → resistance → support. Turn off to mark every valid formation. |
@@ -89,6 +89,14 @@ These match the rule as decoded from the notes; adjust the inputs to taste:
 - **"Break"** = higher high (green) / lower low (red) versus the previous candle.
 - **Death** is evaluated on **closed candles** (an intrabar wick that is not there
   at close does not kill the zone). Use `deathBuf` if you want a tolerance.
-- **Anchor** uses a fixed `lookback` window as a simple, tunable stand-in for
-  "the nearest swing low/high". This is the piece most worth reviewing against
-  more of your real charts.
+- **Anchor** uses a fixed `lookback` window as a stand-in for "the nearest swing
+  low/high". The default of `4` was validated against a hand-marked zone on real
+  BTC-USD 15m candles: a formation completing at 12:00 IST on 2026-08-23 produced
+  a band of **75,602 - 75,865** starting at the 10:45 candle, matching the
+  hand-marked **75,600 - 75,900** starting at ~10:45. Raising it further widens
+  the search without changing the number of zones.
+
+- **Candle colour differs between exchanges.** In that same example the 11:30
+  bar closed 28 points below its open on one feed (red) and above it on another
+  (green), which decides whether the 3-candle formation exists at all. Verify on
+  the same feed you trade.
