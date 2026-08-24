@@ -14,7 +14,8 @@ All four models, confirmed against the full plan (docs/TRADE_PLAN_DECODED.md):
     times R                                                         (p4, p12)
   * entry to the nearest live opposing zone must be >= 2.5R, or no zone (p4, p12)
   * a weak-zone break arms the direction of the NEXT ENTRY only        (p10)
-  * "3 to 4 candle no break" -> close at entry, cost to cost           (p11, p12)
+  * "3 to 4 candle no break" -> cost to cost                           (p11, p12)
+  * price stalling in the 1R-2R band for 1-2 hours -> take 1R          (mentor)
 
 Open: the session window ("market time 6 to 10.30", p2) currently costs win rate
 rather than adding it - see docs/TRADE_PLAN_DECODED.md.
@@ -201,7 +202,8 @@ def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
 def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                    min_zone_r=2.5, tp_r=3.0, zones=None,
                    times=None, daily_bias=False, anchor_hours=4,
-                   use_sl_table=False, c2c_bars=None, c2c_progress_r=1.0):
+                   use_sl_table=False, c2c_bars=None, c2c_progress_r=1.0,
+                   stall_bars=None, stall_lo=1.0, stall_hi=2.0, stall_take=1.0):
     """Walk the candles in order, holding at most one position.
 
     While a trade is open no new order is placed, so signals that appear during
@@ -218,7 +220,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     breaks = break_events(zones) if daily_bias else {}
     armed = None                                      # direction the next entry must take
 
-    result = {m: {"win": 0, "loss": 0, "open": 0, "breakeven": 0} for m in models}
+    result = {m: {"win": 0, "loss": 0, "open": 0, "breakeven": 0, "stall": 0} for m in models}
     rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0}
     log = []
     busy_until = -1                                   # bar index the open trade exits on
@@ -289,6 +291,14 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                     moved = (best - entry) / R if side > 0 else (entry - best) / R
                     if moved < c2c_progress_r:
                         outcome, exit_i = "breakeven", k; break
+                # "for 1 to 2 hours the price moves within 1R to 2R -> exit at 1R":
+                # the move stalled short of target, so bank what is there.
+                if stall_bars and (k - fill_i) >= stall_bars:
+                    best = (max(candles[i][H] for i in range(fill_i, k + 1)) if side > 0
+                            else min(candles[i][L] for i in range(fill_i, k + 1)))
+                    moved = (best - entry) / R if side > 0 else (entry - best) / R
+                    if stall_lo <= moved < stall_hi:
+                        outcome, exit_i = "stall", k; break
             result[m][outcome] += 1
             busy_until = exit_i
             armed = None                              # entry taken -> direction spent
@@ -299,20 +309,22 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     return result, rej, log
 
 
-def report(result, rej, title, tp_r=3.0):
+def report(result, rej, title, tp_r=3.0, stall_take=1.0):
     lines = [title, "-" * len(title)]
-    lines.append(f"{'model':<20}{'trades':>8}{'wins':>7}{'loss':>7}{'win%':>8}{'netR':>9}")
-    TW = TL = TB = 0
+    lines.append(f"{'model':<20}{'trades':>8}{'3R win':>7}{'loss':>7}{'profit%':>8}{'netR':>9}")
+    TW = TL = TB = TS = 0
     for m, t in result.items():
-        w, l, b = t["win"], t["loss"], t.get("breakeven", 0)
-        TW += w; TL += l; TB += b
-        n = w + l + b
-        wr = w / (w + l) * 100 if (w + l) else 0.0
-        lines.append(f"{MODELS[m][0]:<20}{n:>8}{w:>7}{l:>7}{wr:>7.1f}%{w*tp_r-l:>+8.0f}R")
-    n = TW + TL + TB
-    wr = TW / (TW + TL) * 100 if (TW + TL) else 0.0
+        w, l, b, st = t["win"], t["loss"], t.get("breakeven", 0), t.get("stall", 0)
+        TW += w; TL += l; TB += b; TS += st
+        n = w + l + b + st
+        prof = (w + st) / n * 100 if n else 0.0
+        lines.append(f"{MODELS[m][0]:<20}{n:>8}{w:>7}{l:>7}{prof:>7.1f}%{w*tp_r+st*stall_take-l:>+8.0f}R")
+    n = TW + TL + TB + TS
+    wr = (TW + TS) / n * 100 if n else 0.0
     lines.append("-" * 59)
-    lines.append(f"{'TOTAL':<20}{n:>8}{TW:>7}{TL:>7}{wr:>7.1f}%{TW*tp_r-TL:>+8.0f}R")
+    lines.append(f"{'TOTAL':<20}{n:>8}{TW:>7}{TL:>7}{wr:>7.1f}%{TW*tp_r+TS*stall_take-TL:>+8.0f}R")
+    if TS:
+        lines.append(f"exits at {stall_take}R (stalled)     : {TS}")
     if TB:
         lines.append(f"cost-to-cost breakevens   : {TB}   (win% excludes them)")
     lines.append(f"skipped - trade already open: {rej['busy']}")
