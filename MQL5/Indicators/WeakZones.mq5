@@ -30,6 +30,7 @@ input bool   InpAllowDoji        = false;        // Allow a doji (open==close) i
 input int    InpDeathBufferPts   = 0;            // Extra points past the far edge required to call it DEAD (0 = exact)
 input int    InpMaxZones         = 60;           // Max zones kept on the chart
 input bool   InpAlternate        = true;         // Alternate sides (support -> resistance -> support)
+input double InpMinBodyPct       = 15.0;         // Min candle body as % of its range (0 = off)
 input bool   InpExtendRight      = true;         // Stretch live zones to the current bar
 input bool   InpFill             = true;         // Fill live zones
 input color  InpSupportColor     = clrLimeGreen; // Live support (from 3 green)
@@ -122,10 +123,15 @@ int OnCalculate(const int rates_total,
 }
 
 //+------------------------------------------------------------------+
-//| Colour of a candle: 1 = green, -1 = red, 0 = doji                |
+//| Colour of a candle: 1 = green, -1 = red, 0 = no clear colour      |
 //+------------------------------------------------------------------+
-int CandleColor(const double o, const double c)
+int CandleColor(const double o, const double h, const double l, const double c)
 {
+   // A body smaller than InpMinBodyPct of the range counts as no colour: such a
+   // candle can land either side of its open depending on the data feed.
+   double rng = h - l;
+   if(InpMinBodyPct > 0.0 && rng > 0.0 && MathAbs(c - o) / rng * 100.0 < InpMinBodyPct)
+      return(0);
    if(c > o) return(1);
    if(c < o) return(-1);
    return(0);
@@ -160,9 +166,9 @@ void ProcessBar(const int b,
    if(wEnd > rates_total - 1) return;
 
    int cc[3];
-   cc[0] = CandleColor(open[c1], close[c1]);
-   cc[1] = CandleColor(open[c2], close[c2]);
-   cc[2] = CandleColor(open[c3], close[c3]);
+   cc[0] = CandleColor(open[c1], high[c1], low[c1], close[c1]);
+   cc[1] = CandleColor(open[c2], high[c2], low[c2], close[c2]);
+   cc[2] = CandleColor(open[c3], high[c3], low[c3], close[c3]);
 
    int sign = 0, nonDoji = 0;
    bool conflict = false;

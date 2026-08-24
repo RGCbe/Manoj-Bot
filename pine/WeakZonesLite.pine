@@ -13,11 +13,17 @@ indicator('Weak Zones Lite (Manoj-Bot)', overlay = true)
 lookback = input.int(4, 'Anchor lookback (candles before the 1st)', minval = 0)
 deathBuf = input.float(0.0, 'Death buffer (price beyond far edge)', minval = 0.0)
 alternate = input.bool(true, 'Alternate sides (support -> resistance -> support)')
+minBodyPct = input.float(15.0, 'Min candle body (% of its range)', minval = 0.0, maxval = 100.0)
 supFillC = input.color(color.new(color.green, 72), 'Support zone fill')
 resFillC = input.color(color.new(color.red, 72), 'Resistance zone fill')
 w = 3 + lookback
-rawBull = barstate.isconfirmed and close > open and close[1] > open[1] and close[2] > open[2] and high > high[1] and high[1] > high[2]
-rawBear = barstate.isconfirmed and close < open and close[1] < open[1] and close[2] < open[2] and low < low[1] and low[1] < low[2]
+// a candle counts only if its body is a real share of its range (feed-robust)
+big0 = (high - low) > 0 and math.abs(close - open) / (high - low) * 100 >= minBodyPct
+big1 = (high[1] - low[1]) > 0 and math.abs(close[1] - open[1]) / (high[1] - low[1]) * 100 >= minBodyPct
+big2 = (high[2] - low[2]) > 0 and math.abs(close[2] - open[2]) / (high[2] - low[2]) * 100 >= minBodyPct
+big3 = big0 and big1 and big2
+rawBull = barstate.isconfirmed and big3 and close > open and close[1] > open[1] and close[2] > open[2] and high > high[1] and high[1] > high[2]
+rawBear = barstate.isconfirmed and big3 and close < open and close[1] < open[1] and close[2] < open[2] and low < low[1] and low[1] < low[2]
 // Weak points alternate: a support (3 green) is followed by a resistance
 // (3 red), then a support again. lastSide: 1 = last marked was support,
 // -1 = resistance, 0 = none yet. Same-side formations are skipped.

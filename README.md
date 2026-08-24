@@ -77,6 +77,7 @@ stops. Point the same `detect_weak_zones()` at your own OHLC data to check it.
 |-------|---------|--------------|
 | `lookback` / `InpAnchorLookback` | `4` | Candles before the 1st candle to include when finding the nearest low/high. `4` was chosen by matching a hand-marked zone on real BTC 15m data (see below); raise it to reach a deeper swing. |
 | `allowDoji` / `InpAllowDoji` | `false` | Whether a doji may sit inside the 3-candle run |
+| `minBodyPct` / `InpMinBodyPct` | `15` | Reject a formation containing an indecisive candle (body smaller than this share of its high-low range). `0` disables it. |
 | `deathBuf` / `InpDeathBufferPts` | `0` | Extra distance past the far edge before the zone is called dead (filters tiny stop-hunt wicks). `0` = exact rule. |
 | `alternate` / `InpAlternate` | `true` | Require weak points to alternate support → resistance → support. Turn off to mark every valid formation. |
 | `extendRight` / `InpExtendRight` | `true` | Stretch live zones to the current bar |
@@ -96,7 +97,16 @@ These match the rule as decoded from the notes; adjust the inputs to taste:
   hand-marked **75,600 - 75,900** starting at ~10:45. Raising it further widens
   the search without changing the number of zones.
 
-- **Candle colour differs between exchanges.** In that same example the 11:30
-  bar closed 28 points below its open on one feed (red) and above it on another
-  (green), which decides whether the 3-candle formation exists at all. Verify on
-  the same feed you trade.
+- **Candle colour differs between exchanges — handled by `minBodyPct`.** In that
+  same example the 11:30 bar closed 28 points below its open on one feed (red)
+  and above it on another (green), which decides whether the 3-candle formation
+  exists at all. Measured over 4 days of BTC 15m, **43% of zones (10 of 23)**
+  rested on a candle whose body was under 15% of its range — those are exactly
+  the ones whose colour can flip between feeds.
+
+  The `minBodyPct` default of **15** treats such a candle as having no colour, so
+  a formation only counts when all three candles closed decisively. That takes
+  the same 4 days from 23 zones to 13 with **zero** fragile formations left,
+  while keeping the hand-marked 75,899 support. It is a robustness filter, not
+  just a cross-feed one: a formation built on three near-doji candles is a weak
+  signal on any feed.

@@ -27,8 +27,17 @@ from __future__ import annotations
 O, H, L, C = 0, 1, 2, 3   # tuple indices
 
 
-def candle_color(c):
-    """1 = green (bullish), -1 = red (bearish), 0 = doji."""
+def candle_color(c, min_body_pct=0.0):
+    """1 = green (bullish), -1 = red (bearish), 0 = no clear colour.
+
+    A candle whose body is smaller than `min_body_pct` of its high-low range is
+    treated as having no colour. Such a candle closes within a few points of its
+    open, so which side it lands on is near-arbitrary and can differ between
+    exchange feeds - see `min_body_pct` in the README.
+    """
+    rng = c[H] - c[L]
+    if min_body_pct > 0.0 and rng > 0 and abs(c[C] - c[O]) / rng * 100.0 < min_body_pct:
+        return 0
     if c[C] > c[O]:
         return 1
     if c[C] < c[O]:
@@ -37,13 +46,17 @@ def candle_color(c):
 
 
 def detect_weak_zones(candles, lookback=4, allow_doji=False, death_buffer=0.0,
-                      alternate=True):
+                      alternate=True, min_body_pct=15.0):
     """Return the list of zones marked over `candles` (processed chronologically).
 
     With `alternate` (the default), weak points must alternate sides: a support
     marked from 3 green candles is followed by a resistance from 3 red, then a
     support again, and so on. Consecutive formations on the same side are
     skipped, which is what keeps the count down to the swing turns.
+
+    `min_body_pct` rejects a formation containing an indecisive candle (a body
+    smaller than that share of its high-low range). Set it to 0 to accept every
+    formation.
     """
     n = len(candles)
     zones = []
@@ -69,7 +82,7 @@ def detect_weak_zones(candles, lookback=4, allow_doji=False, death_buffer=0.0,
         if c1 < 0 or w_end < 0:
             continue
 
-        cols = [candle_color(candles[c1]), candle_color(candles[c2]), candle_color(candles[c3])]
+        cols = [candle_color(candles[k], min_body_pct) for k in (c1, c2, c3)]
         sign, non_doji, conflict = 0, 0, False
         for cc in cols:
             if cc == 0:

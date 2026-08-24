@@ -29,6 +29,7 @@ deathBuf    = input.float(0.0, "Death buffer (price beyond far edge)", minval = 
 extendRight = input.bool(true, "Extend live zones to the current bar")
 maxZones    = input.int(60, "Max zones kept", minval = 1)
 alternate   = input.bool(true, "Alternate sides (support -> resistance -> support)")
+minBodyPct  = input.float(15.0, "Min candle body (% of its range)", minval = 0.0, maxval = 100.0)
 
 supFill   = input.color(color.new(color.lime, 82), "Live support fill",    group = "Colours")
 resFill   = input.color(color.new(color.red,  82), "Live resistance fill", group = "Colours")
@@ -47,7 +48,9 @@ var array<bool>  zAlive = array.new<bool>()
 var int lastSide = 0
 
 // candle colour at a history offset: 1 = green, -1 = red, 0 = doji
-cColor(offset) => close[offset] > open[offset] ? 1 : close[offset] < open[offset] ? -1 : 0
+// A body smaller than minBodyPct of the candle's range counts as no colour:
+// such a candle can land either side of its open depending on the data feed.
+cColor(offset) => (high[offset] - low[offset]) > 0 and math.abs(close[offset] - open[offset]) / (high[offset] - low[offset]) * 100 < minBodyPct ? 0 : close[offset] > open[offset] ? 1 : close[offset] < open[offset] ? -1 : 0
 
 // -----------------------------------------------------------------------------
 //  Act once per closed bar
