@@ -19,6 +19,11 @@ All four models, confirmed against the full plan (docs/TRADE_PLAN_DECODED.md):
     take a small profit, exiting at +0.5R once price returns to it. The stop
     still applies while waiting.                                     (p11, p12)
   * price stalling in the 1R-2R band for 1-2 hours -> take 1R          (mentor)
+  * dealing cost is folded into the stop, so R is the ALL-IN risk. p6 does
+    this with the broker spread; on a percentage-fee venue the commission
+    belongs there too - `cost_points`. A stop-out then costs exactly the
+    intended risk, and the position is sized correctly rather than paying
+    fees on top of a full-size loss.
 
 Open: the session window ("market time 6 to 10.30", p2) currently costs win rate
 rather than adding it - see docs/TRADE_PLAN_DECODED.md.
@@ -205,7 +210,7 @@ def run_model(candles, model, entry_buffer=0.0, sl_buffer=0.0,
 def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                    min_zone_r=2.5, tp_r=3.0, zones=None,
                    times=None, daily_bias=False, anchor_hours=4,
-                   use_sl_table=False, c2c_bars=None, c2c_take=0.5,
+                   use_sl_table=False, cost_points=0.0, c2c_bars=None, c2c_take=0.5,
                    stall_bars=None, stall_lo=1.0, stall_hi=2.0, stall_take=1.0):
     """Walk the candles in order, holding at most one position.
 
@@ -252,12 +257,12 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                 raw   = min(c1[L], c2[L])
                 # p4 table: the stop buffer scales with the raw stop distance
                 buf   = sl_buffer_for(entry - raw) if use_sl_table else sl_buffer
-                sl    = raw - buf
+                sl    = raw - buf - cost_points
             else:
                 entry = c2[L] - entry_buffer
                 raw   = max(c1[H], c2[H])
                 buf   = sl_buffer_for(raw - entry) if use_sl_table else sl_buffer
-                sl    = raw + buf
+                sl    = raw + buf + cost_points
             R = abs(entry - sl)
             if R <= 0:
                 break

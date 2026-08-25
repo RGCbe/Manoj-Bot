@@ -84,3 +84,19 @@ if __name__ == "__main__":
               f"{p['fees_pct_of_risk']:>10.1f}%  {'yes' if p['stop_is_safe'] else 'NO'}")
     print("\nAt 2% risk the position never approaches liquidation: the stop is always")
     print("reached first, which is the whole point of sizing by risk.")
+
+
+def cost_points(price, spread=0.0, taker=TAKER_FEE):
+    """Dealing cost of a round trip, expressed in price points.
+
+    The fee is a share of notional and the P&L is per point, so the two scale
+    together and the cost in points is independent of position size:
+
+        fee_points = price * taker * 2
+
+    Fold this into the stop (p6 does the same with the broker spread) so that R
+    is the all-in risk. Sized that way a stop-out costs exactly the intended
+    percentage instead of that percentage plus commission - which on August's
+    Delta data is the difference between -0.3% and +13.4% on a $100 account.
+    """
+    return spread + price * taker * 2
