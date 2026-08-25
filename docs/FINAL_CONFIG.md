@@ -139,7 +139,33 @@ An earlier +33.6% for "weekdays only" came from a naive IST weekday test that
 cut different bars and happened to drop one losing trade; the correct UTC
 boundaries keep all 34 trades.
 
-## 11. Still open
+## 11. Which venue to trade this on
+
+The rules are venue-independent; the economics are not. Measured, not assumed:
+
+| | Delta XAUT | MT5 spot gold |
+|---|---|---|
+| instrument | Tether Gold token — tracks spot at 0.983 correlation but sits at a widening ~$13 (-0.30%) discount | **real spot XAUUSD** |
+| dealing cost | 0.030 spread + 0.0001 fee = **0.956 pts** (~10% of a typical R) | 0.200 spread, no commission = **0.200 pts** (~2% of R) |
+| smallest workable account | **$100** (0.001 contracts size precisely) | **~$1,000** (0.01 lot minimum risks $1/point, so a $100 account can take 0 of 30 trades at 2% risk) |
+| weekends | trades 24/7 on thin unbacked price action | closed, as the method assumes |
+| comparable to the mentor | no | **yes — same instrument and feed** |
+| other instruments | crypto, stocks, silver all tested negative (`INSTRUMENT_SURVEY.md`) | not tested |
+
+**Delta is viable for XAUT gold and nothing else on it.** Its gold config is the
+best result in this project: +26.7% over 60 days at 5% risk, 18.5% drawdown, and
+no losing or ruinous outcome across 5000 shuffled trade orderings.
+
+**MT5 spot gold is the better home when the account can reach ~$1,000.** It keeps
+roughly five times more of the gross edge, trades the actual instrument, and is
+directly comparable to the mentor's 27-trade August benchmark.
+
+So the venue choice is a function of account size, not of the rules:
+
+* under ~$1,000 -> Delta, XAUT only, min R >= 6
+* ~$1,000 and up -> MT5 spot gold, where the cost stops mattering
+
+## 12. Still open
 * Whether the mentor counts cost-to-cost exits among his 27 August trades.
 * Pine and MT5 still carry the zone-marking rules only; the entry, exit and
   sizing logic above is Python-only so far.
