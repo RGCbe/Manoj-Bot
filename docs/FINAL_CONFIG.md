@@ -117,11 +117,29 @@ at 57.1% profitable and +14.0R, against his 27 trades and 59.3%.
 * **A 5% ordering can put you near $50 before recovering.** No ordering lost
   money on this data, but the drawdown is real.
 
-## 10. Still open
+## 10. Session — settled: OFF, but only trade while gold is open
 
-* The p2 session window ("market time 6 to 10.30") costs win rate whenever it is
-  applied. Either the window is narrower than 06:00-22:30, or a session-blocked
-  signal should spend the armed direction. Undecided — currently **off**.
+Every intraday session window tested worse, on 60 days of Delta at 5% risk:
+
+| session | trades | return | maxDD |
+|---|---|---|---|
+| **none** | 34 | **+26.7%** | 19.7% |
+| 06:00-22:30 IST | 32 | +10.1% | 22.6% |
+| 06:00-10:30 IST (morning) | 16 | **-12.6%** | 22.6% |
+
+Only 8 of 34 trades fall outside 06:00-22:30 and those 8 made **+$5.39** — the
+window cuts profitable trades. **No intraday session filter.**
+
+Separately, `weekdays_only` restricts trading to when spot gold is actually open
+(Sun 22:00 - Fri 21:00 UTC). On Delta, where XAUT keeps trading the weekend on
+thin unbacked price action, this is on. Its effect is close to neutral (+26.9%
+vs +26.7%, drawdown 18.5% vs 19.7%) — it is there because trading an instrument
+whose underlying market is shut is not the method, not because it adds return.
+An earlier +33.6% for "weekdays only" came from a naive IST weekday test that
+cut different bars and happened to drop one losing trade; the correct UTC
+boundaries keep all 34 trades.
+
+## 11. Still open
 * Whether the mentor counts cost-to-cost exits among his 27 August trades.
 * Pine and MT5 still carry the zone-marking rules only; the entry, exit and
   sizing logic above is Python-only so far.

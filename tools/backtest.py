@@ -35,6 +35,10 @@ All four models, confirmed against the full plan (docs/TRADE_PLAN_DECODED.md):
     the risk (fee/risk = cost_points/R, so it is a minimum-R rule), and
     `funding_rate` charges perpetual funding per 8h stamp crossed.
 
+  * `weekdays_only` trades only while spot gold is open (Sun 22:00 - Fri 21:00
+    UTC). Matters on a 24/7 crypto venue like Delta, where XAUT keeps trading
+    through the weekend on thin, unbacked price action.
+
 Open: the session window ("market time 6 to 10.30", p2) currently costs win rate
 rather than adding it - see docs/TRADE_PLAN_DECODED.md.
 """
@@ -166,6 +170,25 @@ def funding_cost_r(times, fill_i, exit_i, price, R, rate, hours=8):
     return (price * rate * windows) / R
 
 
+def gold_market_open(ts):
+    """True when the spot gold market is open at epoch-seconds `ts`.
+
+    Gold's week runs from Sunday 22:00 UTC to Friday 21:00 UTC. XAUT on a crypto
+    exchange keeps trading through the gap, but that is thin, unbacked price
+    action the mentor never trades - and the zones it forms feed into Monday's
+    signals. A naive weekday test gets the edges wrong in IST, so check UTC.
+    """
+    d = _dt.datetime.fromtimestamp(ts, _dt.timezone.utc)
+    wd, hr = d.weekday(), d.hour                # Mon=0 .. Sun=6
+    if wd == 5:                                 # Saturday: closed all day
+        return False
+    if wd == 4 and hr >= 21:                    # Friday close
+        return False
+    if wd == 6 and hr < 22:                     # Sunday before the reopen
+        return False
+    return True
+
+
 def break_events(zones):
     """{bar_index: +1 buy-side break / -1 sell-side break}.
 
@@ -240,7 +263,8 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                    use_sl_table=False, cost_points=0.0, c2c_bars=None, c2c_take=0.5,
                    stall_bars=None, stall_lo=1.0, stall_hi=2.0, stall_take=1.0,
                    scale_out=None, scale_trail=False, scale_trail_be=False,
-                   max_fee_pct=None, funding_rate=0.0, funding_hours=8):
+                   max_fee_pct=None, funding_rate=0.0, funding_hours=8,
+                   weekdays_only=False):
     """Walk the candles in order, holding at most one position.
 
     While a trade is open no new order is placed, so signals that appear during
@@ -258,7 +282,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     armed = None                                      # direction the next entry must take
 
     result = {m: {"win": 0, "loss": 0, "open": 0, "costtocost": 0, "stall": 0, "partial": 0, "trailed": 0} for m in models}
-    rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0, "fee": 0}
+    rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0, "fee": 0, "closed": 0}
     log = []
     busy_until = -1                                   # bar index the open trade exits on
 
@@ -277,6 +301,10 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                 break
 
             side = MODELS[m][1]
+            # only trade while the underlying gold market is actually open
+            if weekdays_only and times is not None and not gold_market_open(times[j]):
+                rej["closed"] = rej.get("closed", 0) + 1
+                break
             # a zone break arms the next entry's direction; no armed break -> no trade
             if daily_bias and (armed is None or side != armed):
                 rej["bias"] += 1
@@ -442,4 +470,6 @@ def report(result, rej, title, tp_r=3.0, stall_take=1.0, c2c_take=0.5):
         lines.append(f"skipped - against day bias  : {rej['bias']}")
     if rej.get("fee"):
         lines.append(f"skipped - fee too big vs R  : {rej['fee']}")
+    if rej.get("closed"):
+        lines.append(f"skipped - gold market shut  : {rej['closed']}")
     return "\n".join(lines)
