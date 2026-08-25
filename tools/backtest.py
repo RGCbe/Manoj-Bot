@@ -24,11 +24,16 @@ All four models, confirmed against the full plan (docs/TRADE_PLAN_DECODED.md):
     that reaches 1R, which is what carries a rangebound month.        (mentor)
   * `scale_trail`: the stop follows one level behind, so reaching 2R moves it
     to 1R and the last third can no longer lose.                      (mentor)
-  * dealing cost is folded into the stop, so R is the ALL-IN risk. p6 does
-    this with the broker spread; on a percentage-fee venue the commission
-    belongs there too - `cost_points`. A stop-out then costs exactly the
-    intended risk, and the position is sized correctly rather than paying
-    fees on top of a full-size loss.
+  * dealing cost: a SPREAD is a price offset and belongs in `entry_buffer`
+    (p6 does exactly that). A COMMISSION is a cash charge and must NOT move
+    the stop - widening the stop makes a stop-out cost more than the intended
+    risk (measured: 2.29% against a 2.00% target). Instead size the position
+    on R + cost_points, which `cost_points` is reported in the log for; then
+    a stop-out costs exactly the intended risk.
+
+  * `max_fee_pct` skips trades where the venue's cost is too large a share of
+    the risk (fee/risk = cost_points/R, so it is a minimum-R rule), and
+    `funding_rate` charges perpetual funding per 8h stamp crossed.
 
 Open: the session window ("market time 6 to 10.30", p2) currently costs win rate
 rather than adding it - see docs/TRADE_PLAN_DECODED.md.
@@ -144,6 +149,23 @@ def sl_buffer_for(points):
     return SL_BUFFER_TABLE[-1][1]
 
 
+def funding_cost_r(times, fill_i, exit_i, price, R, rate, hours=8):
+    """Perpetual funding paid over a held position, expressed in R.
+
+    Funding is charged on NOTIONAL every `hours`, so a trade held across w
+    stamps pays price*rate*w in points regardless of position size - the same
+    reasoning as cost_points(). Returns 0 when the trade never crosses a stamp,
+    which is most of them on a 15m chart.
+    """
+    if not rate or times is None or exit_i <= fill_i:
+        return 0.0
+    step = hours * 3600
+    windows = int(times[exit_i] // step) - int(times[fill_i] // step)
+    if windows <= 0:
+        return 0.0
+    return (price * rate * windows) / R
+
+
 def break_events(zones):
     """{bar_index: +1 buy-side break / -1 sell-side break}.
 
@@ -217,7 +239,8 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                    times=None, daily_bias=False, anchor_hours=4,
                    use_sl_table=False, cost_points=0.0, c2c_bars=None, c2c_take=0.5,
                    stall_bars=None, stall_lo=1.0, stall_hi=2.0, stall_take=1.0,
-                   scale_out=None, scale_trail=False, scale_trail_be=False):
+                   scale_out=None, scale_trail=False, scale_trail_be=False,
+                   max_fee_pct=None, funding_rate=0.0, funding_hours=8):
     """Walk the candles in order, holding at most one position.
 
     While a trade is open no new order is placed, so signals that appear during
@@ -235,7 +258,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     armed = None                                      # direction the next entry must take
 
     result = {m: {"win": 0, "loss": 0, "open": 0, "costtocost": 0, "stall": 0, "partial": 0, "trailed": 0} for m in models}
-    rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0}
+    rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0, "fee": 0}
     log = []
     busy_until = -1                                   # bar index the open trade exits on
 
@@ -263,15 +286,24 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                 raw   = min(c1[L], c2[L])
                 # p4 table: the stop buffer scales with the raw stop distance
                 buf   = sl_buffer_for(entry - raw) if use_sl_table else sl_buffer
-                sl    = raw - buf - cost_points
+                sl    = raw - buf
             else:
                 entry = c2[L] - entry_buffer
                 raw   = max(c1[H], c2[H])
                 buf   = sl_buffer_for(raw - entry) if use_sl_table else sl_buffer
-                sl    = raw + buf + cost_points
+                sl    = raw + buf
             R = abs(entry - sl)
             if R <= 0:
                 break
+
+            # A percentage-fee venue takes cost_points out of every trade, so on a
+            # tight stop the fee is a large share of what is being risked
+            # (fee/risk = cost_points / R). Below a certain R the trade is not
+            # worth taking at all - this is arithmetic, not a tuned parameter.
+            if max_fee_pct is not None and cost_points > 0:
+                if cost_points / R * 100.0 > max_fee_pct:
+                    rej["fee"] = rej.get("fee", 0) + 1
+                    break
 
             ok, _ = zone_clearance_ok(zones, j, entry, R, side, min_zone_r)
             if not ok:
@@ -322,12 +354,16 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                     if banked == len(scale_out):
                         outcome, exit_i = "win", k
                         break
+                fund = funding_cost_r(times, fill_i, exit_i, entry, R,
+                                      funding_rate, funding_hours)
+                netR -= fund
                 result[m][outcome] = result[m].get(outcome, 0) + 1
                 busy_until = exit_i
                 armed = None
                 log.append({"model": m, "signal": j, "exit": exit_i,
                             "outcome": outcome, "R": R, "netR": netR,
-                            "banked": banked, "bars": exit_i - j})
+                            "banked": banked, "funding_r": fund,
+                            "cost_points": cost_points, "bars": exit_i - j})
                 break
 
             tp = entry + side * tp_r * R
@@ -372,7 +408,10 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
             busy_until = exit_i
             armed = None                              # entry taken -> direction spent
             log.append({"model": m, "signal": j, "exit": exit_i,
-                        "outcome": outcome, "R": R, "bars": exit_i - j})
+                        "outcome": outcome, "R": R, "bars": exit_i - j,
+                        "cost_points": cost_points,
+                        "funding_r": funding_cost_r(times, fill_i, exit_i, entry, R,
+                                                    funding_rate, funding_hours)})
             break                                     # one order per bar
 
     return result, rej, log
@@ -401,4 +440,6 @@ def report(result, rej, title, tp_r=3.0, stall_take=1.0, c2c_take=0.5):
     lines.append(f"skipped - never triggered   : {rej['no_fill']}")
     if rej.get("bias"):
         lines.append(f"skipped - against day bias  : {rej['bias']}")
+    if rej.get("fee"):
+        lines.append(f"skipped - fee too big vs R  : {rej['fee']}")
     return "\n".join(lines)
