@@ -22,6 +22,8 @@ All four models, confirmed against the full plan (docs/TRADE_PLAN_DECODED.md):
   * scale-out (`scale_out=[1,2,3]`): a third of the position closes at 1R, a
     third at 2R, a third at 3R. Caps the win at +2R but pays on every trade
     that reaches 1R, which is what carries a rangebound month.        (mentor)
+  * `scale_trail`: the stop follows one level behind, so reaching 2R moves it
+    to 1R and the last third can no longer lose.                      (mentor)
   * dealing cost is folded into the stop, so R is the ALL-IN risk. p6 does
     this with the broker spread; on a percentage-fee venue the commission
     belongs there too - `cost_points`. A stop-out then costs exactly the
@@ -215,7 +217,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                    times=None, daily_bias=False, anchor_hours=4,
                    use_sl_table=False, cost_points=0.0, c2c_bars=None, c2c_take=0.5,
                    stall_bars=None, stall_lo=1.0, stall_hi=2.0, stall_take=1.0,
-                   scale_out=None):
+                   scale_out=None, scale_trail=False, scale_trail_be=False):
     """Walk the candles in order, holding at most one position.
 
     While a trade is open no new order is placed, so signals that appear during
@@ -232,7 +234,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     breaks = break_events(zones) if daily_bias else {}
     armed = None                                      # direction the next entry must take
 
-    result = {m: {"win": 0, "loss": 0, "open": 0, "costtocost": 0, "stall": 0, "partial": 0} for m in models}
+    result = {m: {"win": 0, "loss": 0, "open": 0, "costtocost": 0, "stall": 0, "partial": 0, "trailed": 0} for m in models}
     rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0}
     log = []
     busy_until = -1                                   # bar index the open trade exits on
@@ -294,18 +296,29 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                 levels = [entry + side * lv * R for lv in scale_out]
                 banked = 0
                 netR = 0.0
+                cur_sl = sl
+                stop_r = -1.0                     # what the rest is worth if stopped
                 outcome, exit_i = "open", len(candles) - 1
                 for k in range(fill_i, len(candles)):
                     b = candles[k]
-                    if (b[L] <= sl) if side > 0 else (b[H] >= sl):
-                        netR -= (1.0 - banked * slice_)          # rest at -1R
-                        outcome = "loss" if banked == 0 else "partial"
+                    if (b[L] <= cur_sl) if side > 0 else (b[H] >= cur_sl):
+                        netR += (1.0 - banked * slice_) * stop_r
+                        outcome = ("loss" if banked == 0 else
+                                   ("partial" if stop_r < 0 else "trailed"))
                         exit_i = k
                         break
                     while banked < len(scale_out) and (
                             (b[H] >= levels[banked]) if side > 0 else (b[L] <= levels[banked])):
                         netR += slice_ * scale_out[banked]
                         banked += 1
+                        # trail the stop one level behind: reaching 2R puts the
+                        # stop at 1R, so the rest can no longer lose.
+                        if scale_trail and banked >= 2:
+                            cur_sl = levels[banked - 2]
+                            stop_r = scale_out[banked - 2]
+                        elif scale_trail_be and banked >= 1:
+                            cur_sl = entry
+                            stop_r = 0.0
                     if banked == len(scale_out):
                         outcome, exit_i = "win", k
                         break
