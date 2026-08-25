@@ -19,6 +19,9 @@ All four models, confirmed against the full plan (docs/TRADE_PLAN_DECODED.md):
     take a small profit, exiting at +0.5R once price returns to it. The stop
     still applies while waiting.                                     (p11, p12)
   * price stalling in the 1R-2R band for 1-2 hours -> take 1R          (mentor)
+  * scale-out (`scale_out=[1,2,3]`): a third of the position closes at 1R, a
+    third at 2R, a third at 3R. Caps the win at +2R but pays on every trade
+    that reaches 1R, which is what carries a rangebound month.        (mentor)
   * dealing cost is folded into the stop, so R is the ALL-IN risk. p6 does
     this with the broker spread; on a percentage-fee venue the commission
     belongs there too - `cost_points`. A stop-out then costs exactly the
@@ -211,7 +214,8 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                    min_zone_r=2.5, tp_r=3.0, zones=None,
                    times=None, daily_bias=False, anchor_hours=4,
                    use_sl_table=False, cost_points=0.0, c2c_bars=None, c2c_take=0.5,
-                   stall_bars=None, stall_lo=1.0, stall_hi=2.0, stall_take=1.0):
+                   stall_bars=None, stall_lo=1.0, stall_hi=2.0, stall_take=1.0,
+                   scale_out=None):
     """Walk the candles in order, holding at most one position.
 
     While a trade is open no new order is placed, so signals that appear during
@@ -228,7 +232,7 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
     breaks = break_events(zones) if daily_bias else {}
     armed = None                                      # direction the next entry must take
 
-    result = {m: {"win": 0, "loss": 0, "open": 0, "costtocost": 0, "stall": 0} for m in models}
+    result = {m: {"win": 0, "loss": 0, "open": 0, "costtocost": 0, "stall": 0, "partial": 0} for m in models}
     rej = {"zone": 0, "no_fill": 0, "busy": 0, "bias": 0}
     log = []
     busy_until = -1                                   # bar index the open trade exits on
@@ -278,9 +282,43 @@ def run_sequential(candles, models=None, entry_buffer=0.0, sl_buffer=0.0,
                 rej["no_fill"] += 1
                 break
 
+            fill_i = j + 1
+
+            # ---- scale-out: close an equal slice at each R level ------------
+            # 1/3 out at 1R, 1/3 at 2R, 1/3 at 3R. The stop stays put for the
+            # remainder (trailing it to entry tested worse - it shakes out
+            # trades that recover). Max gain +2R, max loss still -1R, but any
+            # trade that reaches 1R banks something.
+            if scale_out:
+                slice_ = 1.0 / len(scale_out)
+                levels = [entry + side * lv * R for lv in scale_out]
+                banked = 0
+                netR = 0.0
+                outcome, exit_i = "open", len(candles) - 1
+                for k in range(fill_i, len(candles)):
+                    b = candles[k]
+                    if (b[L] <= sl) if side > 0 else (b[H] >= sl):
+                        netR -= (1.0 - banked * slice_)          # rest at -1R
+                        outcome = "loss" if banked == 0 else "partial"
+                        exit_i = k
+                        break
+                    while banked < len(scale_out) and (
+                            (b[H] >= levels[banked]) if side > 0 else (b[L] <= levels[banked])):
+                        netR += slice_ * scale_out[banked]
+                        banked += 1
+                    if banked == len(scale_out):
+                        outcome, exit_i = "win", k
+                        break
+                result[m][outcome] = result[m].get(outcome, 0) + 1
+                busy_until = exit_i
+                armed = None
+                log.append({"model": m, "signal": j, "exit": exit_i,
+                            "outcome": outcome, "R": R, "netR": netR,
+                            "banked": banked, "bars": exit_i - j})
+                break
+
             tp = entry + side * tp_r * R
             outcome, exit_i = "open", len(candles) - 1
-            fill_i = j + 1
             cut_to_half = False
             for k in range(j + 1, len(candles)):
                 b = candles[k]
