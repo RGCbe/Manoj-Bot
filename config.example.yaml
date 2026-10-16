@@ -1,0 +1,50 @@
+# Copy this file to config.yaml and edit it.  (config.yaml is git-ignored.)
+#
+#   manoj-bot backtest -c config.yaml    # test the strategy on history
+#   manoj-bot run -c config.yaml         # paper trade on live prices
+#   manoj-bot status -c config.yaml      # show position and trades
+
+# paper: simulated orders (default, no money involved)
+# live:  real orders through a ccxt exchange; also needs `--confirm-live` on the command line
+mode: paper
+
+# Crypto pairs look like BTC/USDT. For Yahoo use tickers such as AAPL, RELIANCE.NS (NSE),
+# TCS.BO (BSE) or ^NSEI (NIFTY 50).
+symbol: BTC/USDT
+timeframe: 1h          # 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w (Yahoo has no 4h)
+capital: 1000          # quote currency the bot may trade with (USDT here, INR for NSE)
+poll_interval: 60      # seconds between market checks in `run`
+state_file: state/btc_usdt.json   # use one state file per symbol
+
+data:
+  source: ccxt         # synthetic | csv | yahoo | ccxt
+  exchange: binance    # any ccxt exchange id: binance, kraken, coinbase, bybit, okx, ...
+  # path: data/prices.csv   # for source: csv
+
+strategy:
+  name: ma_crossover   # see `manoj-bot strategies`
+  params:
+    fast: 20
+    slow: 50
+    kind: sma          # sma or ema
+  # name: rsi_reversion
+  # params: {period: 14, oversold: 30, exit_level: 55, trend: 200}
+
+risk:
+  position_size: 0.95  # max share of equity in one position
+  risk_per_trade: null # e.g. 0.01 = size positions so a stop-out loses ~1% of equity
+  stop_loss: 0.05      # sell if price drops 5% below entry (null to disable)
+  take_profit: null    # e.g. 0.10 = sell after a 10% gain
+  max_drawdown: 0.25   # stop trading if equity falls 25% below its peak
+  min_trade_value: 10  # skip orders smaller than this
+  lot_size: null       # 1 = whole shares only (use for stocks); null allows fractions (crypto)
+
+costs:                 # used by backtests and paper trading
+  fee_rate: 0.001      # 0.1% per fill
+  slippage: 0.0005     # 0.05% adverse price per fill
+
+broker:                # only used when mode: live
+  exchange: binance
+  sandbox: true        # testnet; set false only when you are ready for real money
+  # API keys come from environment variables, never from this file:
+  #   MANOJ_BOT_API_KEY, MANOJ_BOT_API_SECRET (and MANOJ_BOT_API_PASSWORD if the exchange needs one)
