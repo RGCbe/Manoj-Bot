@@ -1,4 +1,4 @@
-"""Command line interface: ``manoj-bot backtest | run | status | strategies``."""
+"""Command line interface: ``manoj-bot backtest | run | status | strategies | download``."""
 
 from __future__ import annotations
 
@@ -13,10 +13,11 @@ import yaml
 
 from manoj_bot.backtest import run_backtest
 from manoj_bot.brokers import Broker, PaperBroker
-from manoj_bot.config import DATA_SOURCES, BotConfig
+from manoj_bot.config import DATA_SOURCES, BotConfig, DataConfig
 from manoj_bot.data import build_feed
 from manoj_bot.engine import TradingBot, load_state
 from manoj_bot.strategies import STRATEGIES, build_strategy
+from manoj_bot.timeframes import parse_timeframe
 
 log = logging.getLogger("manoj_bot")
 
@@ -87,6 +88,19 @@ def _parser() -> argparse.ArgumentParser:
 
     strategies = commands.add_parser("strategies", help="list strategies and their parameters")
     strategies.set_defaults(handler=_strategies)
+
+    download = commands.add_parser("download", help="save historical bars to a CSV file")
+    download.add_argument(
+        "--source", choices=[s for s in DATA_SOURCES if s != "csv"], default="yahoo"
+    )
+    download.add_argument("--symbol", required=True, help="e.g. XAUUSD, RELIANCE.NS, BTC/USDT")
+    download.add_argument("--timeframe", default="1d", help="bar size, e.g. 15m, 1h, 1d")
+    download.add_argument("--exchange", default="binance", help="ccxt exchange id")
+    download.add_argument("--start", help="first date, e.g. 2026-01-01")
+    download.add_argument("--end", help="last date (inclusive)")
+    download.add_argument("--bars", type=int, help="number of most recent bars, if no --start")
+    download.add_argument("-o", "--out", required=True, metavar="CSV", help="file to write")
+    download.set_defaults(handler=_download)
     return parser
 
 
@@ -218,6 +232,23 @@ def _strategies(args: argparse.Namespace) -> int:
     for name, cls in STRATEGIES.items():
         params = ", ".join(f"{f.name}={f.default!r}" for f in dataclasses.fields(cls))
         print(f"{name}\n    {' '.join((cls.__doc__ or '').split())}\n    params: {params}")
+    return 0
+
+
+def _download(args: argparse.Namespace) -> int:
+    parse_timeframe(args.timeframe)
+    feed = build_feed(DataConfig(source=args.source, exchange=args.exchange))
+    limit = args.bars or (None if args.start else DEFAULT_BACKTEST_BARS)
+    data = feed.history(args.symbol, args.timeframe, start=args.start, end=args.end, limit=limit)
+    if data.empty:
+        raise ValueError(f"No {args.timeframe} data for {args.symbol} from {args.source}")
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    data.to_csv(out)
+    print(
+        f"Saved {len(data)} {args.timeframe} bars of {args.symbol} "
+        f"({data.index[0]:%Y-%m-%d %H:%M} -> {data.index[-1]:%Y-%m-%d %H:%M} UTC) to {out}"
+    )
     return 0
 
 

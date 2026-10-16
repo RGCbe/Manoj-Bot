@@ -21,6 +21,10 @@ def build_feed(config: DataConfig) -> DataFeed:
         from manoj_bot.data.ccxt_feed import CcxtFeed
 
         return CcxtFeed(config.exchange)
+    if config.source == "dukascopy":
+        from manoj_bot.data.dukascopy import DukascopyFeed
+
+        return DukascopyFeed()
     raise ValueError(f"Unknown data source {config.source!r}")
 
 

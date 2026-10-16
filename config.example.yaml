@@ -17,7 +17,7 @@ poll_interval: 60      # seconds between market checks in `run`
 state_file: state/btc_usdt.json   # use one state file per symbol
 
 data:
-  source: ccxt         # synthetic | csv | yahoo | ccxt
+  source: ccxt         # synthetic | csv | yahoo | ccxt | dukascopy
   exchange: binance    # any ccxt exchange id: binance, kraken, coinbase, bybit, okx, ...
   # path: data/prices.csv   # for source: csv
 

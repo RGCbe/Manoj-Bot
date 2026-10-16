@@ -12,12 +12,12 @@ import yaml
 from manoj_bot.timeframes import parse_timeframe
 
 MODES = ("paper", "live")
-DATA_SOURCES = ("synthetic", "csv", "yahoo", "ccxt")
+DATA_SOURCES = ("synthetic", "csv", "yahoo", "ccxt", "dukascopy")
 
 
 @dataclass
 class DataConfig:
-    source: str = "synthetic"  # synthetic | csv | yahoo | ccxt
+    source: str = "synthetic"  # synthetic | csv | yahoo | ccxt | dukascopy
     exchange: str = "binance"  # ccxt exchange id used for market data
     path: str | None = None  # CSV file, for source "csv"
     seed: int = 42  # random seed, for source "synthetic"

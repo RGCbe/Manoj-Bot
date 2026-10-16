@@ -14,7 +14,7 @@ A modular trading bot written in Python. You can:
 
 - **Realistic backtests:** a signal fires on a bar's close and is filled at the next bar's open. Stop-loss and take-profit trigger inside the bar, and price gaps are handled. Fees and slippage are charged on every fill.
 - **Reports:** total return vs. buy & hold, CAGR, Sharpe ratio, max drawdown, win rate, profit factor, time in market and fees paid. Trades and the equity curve can be exported to CSV.
-- **Data sources:** Yahoo Finance (stocks, ETFs, indices; `RELIANCE.NS`, `TCS.BO`, `^NSEI`, `AAPL`), any ccxt crypto exchange, CSV files, or synthetic prices for offline experiments.
+- **Data sources:** Yahoo Finance (stocks, ETFs, indices; `RELIANCE.NS`, `TCS.BO`, `^NSEI`, `AAPL`), any ccxt crypto exchange, Dukascopy (spot gold, silver and FX), CSV files, or synthetic prices for offline experiments. `manoj-bot download` saves any of them to CSV.
 - **Strategies:** moving-average crossover (SMA or EMA) and RSI mean reversion with an optional trend filter. Adding your own takes about 20 lines.
 - **Risk management:** position sizing by share of equity or by risk per trade, stop-loss, take-profit, a max-drawdown kill switch, and whole-share or lot sizes.
 - **Safe defaults:**
@@ -54,6 +54,9 @@ manoj-bot backtest --source yahoo --symbol ^NSEI --timeframe 1h --bars 500 \
 manoj-bot backtest --source ccxt --exchange binance --symbol BTC/USDT --timeframe 4h \
     --start 2023-01-01 -p fast=12 -p slow=26 -p kind=ema --trades-out trades.csv
 
+# Spot gold (XAU/USD) from Dukascopy, 15-minute bars
+manoj-bot backtest --source dukascopy --symbol XAUUSD --timeframe 15m --start 2026-06-01
+
 # Your own data (columns: date/timestamp, open, high, low, close[, volume])
 manoj-bot backtest --csv data/prices.csv --timeframe 1d
 
@@ -87,6 +90,26 @@ In this run the default strategy lost to buy & hold. That is common, and it is w
 backtest before trading. Times are shown in UTC.
 
 `manoj-bot strategies` lists the strategies and their parameters.
+
+### Saving data to CSV
+
+`manoj-bot download` saves bars from any source to a CSV file. You can then re-run
+backtests offline on exactly the same data with `--csv`:
+
+```bash
+manoj-bot download --source dukascopy --symbol XAUUSD --timeframe 15m --start 2026-06-01 \
+    -o data/XAUUSD_15m.csv
+manoj-bot backtest --csv data/XAUUSD_15m.csv --timeframe 15m
+```
+
+About Dukascopy:
+- It is free, needs no API key, and gives real spot prices: the mid of bid and ask, close
+  to what TradingView shows for spot gold.
+- It is slow and often throttles requests, so expect about 3 days of data per minute.
+- Completed days are cached in `~/.cache/manoj-bot/dukascopy`, so an interrupted
+  download resumes where it stopped.
+- The `data/` folder is git-ignored. Re-create its files with `manoj-bot download`
+  instead of committing them.
 
 ### 2. Paper trade
 
@@ -167,7 +190,7 @@ See [`config.example.yaml`](config.example.yaml) for a commented example.
 | `capital` | `1000` | Amount of quote currency the bot may use |
 | `poll_interval` | `60` | Seconds between market checks in `run` |
 | `state_file` | `state/bot_state.json` | Where the bot's ledger is saved (one per symbol) |
-| `data.source` | `synthetic` | `synthetic`, `csv`, `yahoo` or `ccxt` |
+| `data.source` | `synthetic` | `synthetic`, `csv`, `yahoo`, `ccxt` or `dukascopy` |
 | `data.exchange` | `binance` | ccxt exchange for market data |
 | `data.path` | | CSV file, for `source: csv` |
 | `strategy.name` / `strategy.params` | `ma_crossover` | See `manoj-bot strategies` |

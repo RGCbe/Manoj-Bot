@@ -5,6 +5,7 @@ import yaml
 
 from manoj_bot.cli import main
 from manoj_bot.config import BotConfig
+from manoj_bot.data import CsvFeed
 from manoj_bot.engine import BotState, save_state
 from manoj_bot.portfolio import Trade
 
@@ -54,6 +55,16 @@ def test_strategies(capsys):
     assert main(["strategies"]) == 0
     out = capsys.readouterr().out
     assert "ma_crossover" in out and "rsi_reversion" in out
+
+
+def test_download_writes_a_csv_the_bot_can_read(tmp_path, capsys):
+    out = tmp_path / "data" / "bars.csv"
+    args = ["download", "--source", "synthetic", "--symbol", "X", "--timeframe", "1h"]
+    assert main([*args, "--bars", "50", "-o", str(out)]) == 0
+    assert "Saved 50 1h bars of X" in capsys.readouterr().out
+    assert len(CsvFeed(out).history("X", "1h")) == 50
+    backtest = ["backtest", "--csv", str(out), "--timeframe", "1h", "-p", "fast=3", "-p", "slow=10"]
+    assert main(backtest) == 0
 
 
 def test_live_mode_needs_explicit_confirmation(tmp_path, capsys):

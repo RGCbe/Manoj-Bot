@@ -12,3 +12,6 @@ venv/
 config.yaml
 .env
 state/
+
+# Downloaded market data (re-create with `manoj-bot download`)
+/data/
