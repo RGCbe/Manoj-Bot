@@ -111,6 +111,25 @@ About Dukascopy:
 - The `data/` folder is git-ignored. Re-create its files with `manoj-bot download`
   instead of committing them.
 
+### Weak zones (support and resistance)
+
+`manoj-bot zones` lists the weak zones the way they are marked by hand on a 15-minute
+gold chart. The rules are written out at the top of `manoj_bot/zones.py`:
+
+- **Formation:** 3 same-colour candles, each breaking the one before.
+- **Anchor:** each zone starts at the previous high or low.
+- **Alternation:** zones alternate between support and resistance.
+- **Newest only:** a new zone replaces the old one of its kind.
+- **End:** a zone dies when a wick breaks through it, or after 2 days.
+
+Checked against the mentor's chart photos from Sep 25 to Oct 16, it draws almost all of
+his zones.
+
+```bash
+manoj-bot zones --csv data/XAUUSD_15m.csv --start 2026-10-15 --tz Asia/Kolkata
+manoj-bot zones --source dukascopy --symbol XAUUSD --start 2026-10-15 -o zones.csv
+```
+
 ### 2. Paper trade
 
 ```bash
@@ -238,7 +257,7 @@ Then add it to the `STRATEGIES` registry in `manoj_bot/strategies/__init__.py`. 
 
 ```
 manoj_bot/
-  cli.py            command line (backtest, run, status, strategies)
+  cli.py            command line (backtest, run, status, strategies, download, zones)
   config.py         YAML config and validation
   backtest.py       bar-by-bar backtester
   engine.py         paper/live trading loop and state file
@@ -246,6 +265,7 @@ manoj_bot/
   risk.py           position sizing, stop/target levels, drawdown check
   portfolio.py      cash/position ledger, fills and trades
   indicators.py     SMA, EMA, RSI
+  zones.py          weak zones (support / resistance)
   strategies/       ma_crossover, rsi_reversion
   data/             yahoo, ccxt, csv and synthetic feeds
   brokers/          paper and ccxt brokers

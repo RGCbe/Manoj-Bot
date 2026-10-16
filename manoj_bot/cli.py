@@ -1,4 +1,4 @@
-"""Command line interface: ``manoj-bot backtest | run | status | strategies | download``."""
+"""Command line interface: ``manoj-bot backtest | run | status | strategies | download | zones``."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from manoj_bot.data import build_feed
 from manoj_bot.engine import TradingBot, load_state
 from manoj_bot.strategies import STRATEGIES, build_strategy
 from manoj_bot.timeframes import parse_timeframe
+from manoj_bot.zones import find_zones, zones_frame
 
 log = logging.getLogger("manoj_bot")
 
@@ -101,6 +102,19 @@ def _parser() -> argparse.ArgumentParser:
     download.add_argument("--bars", type=int, help="number of most recent bars, if no --start")
     download.add_argument("-o", "--out", required=True, metavar="CSV", help="file to write")
     download.set_defaults(handler=_download)
+
+    zones = commands.add_parser("zones", help="list the weak zones (support / resistance)")
+    zones.add_argument("--source", choices=DATA_SOURCES, default="dukascopy", help="data source")
+    zones.add_argument("--csv", metavar="PATH", help="read bars from a CSV file")
+    zones.add_argument("--symbol", default="XAUUSD", help="e.g. XAUUSD, BTC/USDT")
+    zones.add_argument("--timeframe", default="15m", help="bar size, e.g. 15m")
+    zones.add_argument("--exchange", default="binance", help="ccxt exchange id")
+    zones.add_argument("--start", help="first date, e.g. 2026-10-15")
+    zones.add_argument("--end", help="last date (inclusive)")
+    zones.add_argument("--bars", type=int, help="number of most recent bars, if no --start")
+    zones.add_argument("--tz", default="UTC", help="time zone to print, e.g. Asia/Kolkata")
+    zones.add_argument("-o", "--out", metavar="CSV", help="also write the zones to a CSV")
+    zones.set_defaults(handler=_zones)
     return parser
 
 
@@ -249,6 +263,36 @@ def _download(args: argparse.Namespace) -> int:
         f"Saved {len(data)} {args.timeframe} bars of {args.symbol} "
         f"({data.index[0]:%Y-%m-%d %H:%M} -> {data.index[-1]:%Y-%m-%d %H:%M} UTC) to {out}"
     )
+    return 0
+
+
+def _zones(args: argparse.Namespace) -> int:
+    parse_timeframe(args.timeframe)
+    source = "csv" if args.csv else args.source
+    feed = build_feed(DataConfig(source=source, exchange=args.exchange, path=args.csv))
+    limit = args.bars or (None if args.start else DEFAULT_BACKTEST_BARS)
+    data = feed.history(args.symbol, args.timeframe, start=args.start, end=args.end, limit=limit)
+    if data.empty:
+        raise ValueError(f"No {args.timeframe} data for {args.symbol} from {source}")
+    zones = find_zones(data)
+    print(f"{len(zones)} weak zones in {args.symbol} {args.timeframe}, times in {args.tz}")
+    for zone in zones:
+        start = zone.start.tz_convert(args.tz)
+        formed = zone.formed.tz_convert(args.tz)
+        end = (
+            f"{zone.end_reason} {zone.end.tz_convert(args.tz):%a %d %b %H:%M}"
+            if zone.end is not None
+            else "live"
+        )
+        print(
+            f"  {zone.kind:<10}  {zone.bottom:,.2f} - {zone.top:,.2f}  "
+            f"from {start:%a %d %b %H:%M}  formed {formed:%H:%M}  {end}"
+        )
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        zones_frame(zones).to_csv(out, index=False)
+        print(f"Zones written to {out}")
     return 0
 
 
