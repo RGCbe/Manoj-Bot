@@ -21,10 +21,19 @@ BASE_URL = "https://datafeed.dukascopy.com/datafeed"
 ALIASES = {"GOLD": "XAUUSD", "SILVER": "XAGUSD"}
 COLUMNS = [*OHLC, "volume"]
 # Hourly tick files: ms into the hour, ask, bid (integer prices), ask volume, bid volume.
-TICK = np.dtype([("ms", ">u4"), ("ask", ">u4"), ("bid", ">u4"), ("ask_vol", ">f4"), ("bid_vol", ">f4")])
+TICK = np.dtype(
+    [("ms", ">u4"), ("ask", ">u4"), ("bid", ">u4"), ("ask_vol", ">f4"), ("bid_vol", ">f4")]
+)
 # Daily 1-minute candle files, one per side (BID/ASK): seconds into the day, then prices.
 CANDLE = np.dtype(
-    [("sec", ">u4"), ("open", ">u4"), ("close", ">u4"), ("low", ">u4"), ("high", ">u4"), ("volume", ">f4")]
+    [
+        ("sec", ">u4"),
+        ("open", ">u4"),
+        ("close", ">u4"),
+        ("low", ">u4"),
+        ("high", ">u4"),
+        ("volume", ">f4"),
+    ]
 )
 RETRIES = 8
 DEFAULT_CACHE = Path.home() / ".cache" / "manoj-bot" / "dukascopy"
@@ -89,8 +98,10 @@ class DukascopyFeed(DataFeed):
                     log.info("%s: %d of %d days done", name, done, len(days))
         if not frames:
             raise ValueError(f"Dukascopy has no {name} data between {first} and {last}")
-        bars = pd.concat(frames).resample(step).agg(
-            {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+        bars = (
+            pd.concat(frames)
+            .resample(step)
+            .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
         )
         return clip(normalize_ohlcv(bars), start, end, limit)
 
@@ -125,7 +136,10 @@ class DukascopyFeed(DataFeed):
             return None
         scale = 2 * price_scale(name)
         frame = pd.DataFrame(
-            {column: (bid[column].astype(float) + ask[column].astype(float)) / scale for column in OHLC},
+            {
+                column: (bid[column].astype(float) + ask[column].astype(float)) / scale
+                for column in OHLC
+            },
             index=day + pd.to_timedelta(bid["sec"].astype("int64"), unit="s"),
         )
         frame["volume"] = bid["volume"].astype(float) + ask["volume"].astype(float)
