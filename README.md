@@ -159,6 +159,20 @@ manoj-bot zone-trades --csv data/XAUUSD_15m.csv -p max_trades_thursday=3 --setup
 not traded. Start a few days before the period you care about, so the first zones and
 breaks already exist.
 
+**Lot sizes.** `--balance` replays the trades on an account (in USD for XAUUSD) and shows
+the lots, the money result of each trade and the balance by month:
+
+```bash
+manoj-bot zone-trades --csv data/XAUUSD_15m.csv --start 2026-06-01 --balance 1000 --risk 0.02
+```
+
+- Each trade risks `--risk` of the balance at the time (0.02 = 2%). Lots = balance x risk /
+  (stop distance x 100 oz), rounded down to 0.01 lot so the real risk never goes above it.
+- If even 0.01 lot would risk more, the trade is skipped, so a small account stays safe.
+- The thirds are split in whole 0.01 lots: 0.02 lot closes 0.01 at 1R and 0.01 at 2R.
+- `--contract-size`, `--min-lot`, `--lot-step`, `--commission` (per lot, round trip) and
+  `--leverage` (caps lots by margin) match the settings of your broker.
+
 Results on spot gold:
 
 | Period | Trades | Win rate | Net | Worst drop |
@@ -309,6 +323,7 @@ manoj_bot/
   indicators.py     SMA, EMA, RSI
   zones.py          weak zones (support / resistance)
   zone_trades.py    the mentor's entry and exit rules on the weak zones
+  lots.py           lot sizing and an account replay of the weak-zone trades
   strategies/       ma_crossover, rsi_reversion
   data/             yahoo, ccxt, csv and synthetic feeds
   brokers/          paper and ccxt brokers

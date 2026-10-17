@@ -19,6 +19,7 @@ from manoj_bot.brokers import Broker, PaperBroker
 from manoj_bot.config import DATA_SOURCES, BotConfig, DataConfig
 from manoj_bot.data import build_feed
 from manoj_bot.engine import TradingBot, load_state
+from manoj_bot.lots import LotRules, replay_account
 from manoj_bot.strategies import STRATEGIES, build_strategy
 from manoj_bot.timeframes import parse_timeframe
 from manoj_bot.zone_trades import ZoneRules, setups_frame, summarize, trades_frame, zone_trades
@@ -129,6 +130,22 @@ def _parser() -> argparse.ArgumentParser:
     trades.add_argument(
         "--setups-out", metavar="CSV", help="write every setup and why it was or was not traded"
     )
+    trades.add_argument(
+        "--balance", type=float, help="starting balance (USD): adds lot sizes and money results"
+    )
+    trades.add_argument(
+        "--risk",
+        type=float,
+        default=0.01,
+        help="share of the balance risked per trade (0.02 = 2%%)",
+    )
+    trades.add_argument("--contract-size", type=float, default=100.0, help="ounces per lot")
+    trades.add_argument(
+        "--min-lot", type=float, default=0.01, help="smallest order the broker takes"
+    )
+    trades.add_argument("--lot-step", type=float, default=0.01, help="lot size increment")
+    trades.add_argument("--commission", type=float, default=0.0, help="round-trip cost per lot")
+    trades.add_argument("--leverage", type=float, help="e.g. 500 for 1:500; caps lots by margin")
     trades.set_defaults(handler=_zone_trades)
     return parser
 
@@ -336,14 +353,33 @@ def _zone_trades(args: argparse.Namespace) -> int:
         )
     rules = ZoneRules(**params)
     trades, setups = zone_trades(_load_bars(args), rules)
+    account = None
+    if args.balance is not None:
+        lot_rules = LotRules(
+            risk=args.risk,
+            contract_size=args.contract_size,
+            min_lot=args.min_lot,
+            lot_step=args.lot_step,
+            commission_per_lot=args.commission,
+            leverage=args.leverage,
+        )
+        account = replay_account(trades, args.balance, lot_rules)
     print(f"{len(trades)} weak-zone trades in {args.symbol} {args.timeframe}, times in {rules.tz}")
-    for trade in trades:
+    for n, trade in enumerate(trades):
         signal = trade.signal_time.tz_convert(rules.tz)
         exit_ = trade.exit_time.tz_convert(rules.tz)
+        money = ""
+        if account:
+            row = account[n]
+            money = (
+                f"  {row.lots:.2f} lot {row.pnl:+,.2f} -> {row.balance_after:,.2f}"
+                if row.lots
+                else "  skipped: the minimum lot risks too much"
+            )
         print(
             f"  {signal:%a %d %b %H:%M}  {trade.side.upper():<4}  {trade.pattern:<17}  "
             f"entry {trade.entry:,.2f}  stop {trade.stop:,.2f}  1R {trade.risk:.2f}  "
-            f"{trade.outcome:<7} {trade.result_r:+.2f}R  exit {exit_:%a %d %b %H:%M}"
+            f"{trade.outcome:<7} {trade.result_r:+.2f}R  exit {exit_:%a %d %b %H:%M}{money}"
         )
     totals = summarize(trades)
     print(
@@ -351,19 +387,41 @@ def _zone_trades(args: argparse.Namespace) -> int:
         f"net {totals['net_r']:+.1f}R, worst drop {totals['max_drawdown_r']:.1f}R, "
         f"longest losing run {totals['longest_losing_run']}"
     )
+    frame = trades_frame(trades)
+    if account:
+        frame["lots"] = [row.lots for row in account]
+        frame["pnl"] = [row.pnl for row in account]
+        frame["balance_after"] = [row.balance_after for row in account]
     if trades:
-        frame = trades_frame(trades)
         month = frame.signal_time.dt.tz_convert(rules.tz).dt.strftime("%Y-%m")
         by_month = frame.groupby(month, sort=True).result_r.sum()
         print("By month: " + ", ".join(f"{m} {r:+.1f}R" for m, r in by_month.items()))
-    for path, frame, what in (
-        (args.out, trades_frame(trades), "Trades"),
+    if account:
+        balances = [args.balance] + [row.balance_after for row in account]
+        peak, drop = balances[0], 0.0
+        for value in balances:
+            peak = max(peak, value)
+            drop = max(drop, 1 - value / peak)
+        end = balances[-1]
+        skipped = sum(row.lots == 0 for row in account)
+        print(
+            f"Account {args.balance:,.2f} -> {end:,.2f} ({end / args.balance - 1:+.1%}) "
+            f"risking {args.risk:.1%} a trade, worst drop {drop:.1%}, "
+            f"{skipped} trades skipped as too small for the minimum lot"
+        )
+        if trades:
+            start = args.balance
+            for m, pnl in frame.groupby(month, sort=True).pnl.sum().items():
+                print(f"  {m}  {pnl:+,.2f} ({pnl / start:+.1%})  balance {start + pnl:,.2f}")
+                start += pnl
+    for path, table, what in (
+        (args.out, frame, "Trades"),
         (args.setups_out, setups_frame(setups), "Setups"),
     ):
         if path:
             out = Path(path)
             out.parent.mkdir(parents=True, exist_ok=True)
-            frame.to_csv(out, index=False)
+            table.to_csv(out, index=False)
             print(f"{what} written to {out}")
     return 0
 
