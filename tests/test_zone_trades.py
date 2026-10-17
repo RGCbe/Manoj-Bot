@@ -15,6 +15,13 @@ C2 = (101.3, 103.7, 100.5, 103.4)  # bullish engulfing: buy at 104.0, stop 100.0
 TO_1R = (103.5, 108.5, 103.2, 108.2)  # fills the buy and reaches 108 (1R)
 TO_3R = (108.2, 116.5, 108.0, 116.0)
 STOPPED = (103.5, 104.5, 99.5, 100.0)  # fills and hits the stop
+B1 = (110.0, 114.0, 109.5, 113.5)
+B2 = (
+    113.0,
+    114.5,
+    112.0,
+    112.5,
+)  # bearish harami; its lowest point, 109.5, is 1.375R above the buy
 
 
 def bars(rows, start=MONDAY):
@@ -61,6 +68,25 @@ def test_outcomes(after, result, outcome):
     (trade,) = run([FLAT, FLAT, C1, C2, *after])[0]
     assert trade.outcome == outcome
     assert trade.result_r == pytest.approx(result)
+
+
+def test_buy_aims_for_the_last_bearish_pattern_above():
+    rows = [FLAT, B1, B2, FLAT, C1, C2, TO_1R, (108.2, 110.0, 108.0, 109.8)]
+    (trade,) = run(rows)[0]
+    assert (trade.outcome, trade.target) == ("target", 109.5)
+    assert trade.result_r == pytest.approx((109.5 - 104.0) / 4)  # the whole trade closes there
+    (stopped,) = run([FLAT, B1, B2, FLAT, C1, C2, STOPPED])[0]
+    assert (stopped.outcome, stopped.result_r, stopped.target) == ("loss", -1.0, 109.5)
+    (thirds,) = run(rows, opposite_target=False)[0]
+    assert thirds.outcome == "open" and thirds.target is None
+
+
+def test_an_opposite_pattern_3r_or_more_away_keeps_the_thirds():
+    far1 = (116.5, 120.0, 116.0, 119.5)
+    far2 = (119.0, 120.5, 118.0, 118.5)  # lowest point 116 is exactly 3R above the buy
+    (trade,) = run([FLAT, far1, far2, FLAT, C1, C2, TO_1R, TO_3R])[0]
+    assert (trade.outcome, trade.target) == ("win", None)
+    assert trade.result_r == pytest.approx(2.0)
 
 
 def test_rests_for_the_day_after_the_first_trade_wins():
@@ -142,6 +168,8 @@ def test_bad_rules():
         ZoneRules(session_start=22, session_end=6)
     with pytest.raises(ValueError, match="max_stop"):
         ZoneRules(max_stop=0)
+    with pytest.raises(ValueError, match="opposite_max_r"):
+        ZoneRules(opposite_min_r=2, opposite_max_r=1)
 
 
 def test_summary_and_frame():

@@ -1,6 +1,6 @@
 """Weak-zone trades: the mentor's entry, exit and day rules on top of the weak zones.
 
-Decoded from his trades and tested on spot gold, 15-minute candles (Jun 1 - Oct 16 2026).
+Decoded from his trades and tested on spot gold, 15-minute candles (Jan - Oct 2026).
 Times are India time (``ZoneRules.tz``).
 
 Direction
@@ -29,8 +29,13 @@ Filters
 9. When the day's first trade ends in profit the bot stops for the day.
 
 Exit
-10. A third of the position closes at 1R, 2R and 3R. Once 2R is reached the stop moves to
-    1R. If a candle reaches both the stop and a target, the stop is assumed to come first.
+10. Price tends to run to the last opposite pattern: for a buy, the most recent bearish
+    pattern above the entry (its lowest point); for a sell, the most recent bullish pattern
+    below it (its highest point), from the last ``opposite_lookback`` candles. When that
+    level is ``opposite_min_r`` to ``opposite_max_r`` R away, the whole trade closes there.
+11. Otherwise a third of the position closes at 1R, 2R and 3R, and once 2R is reached the
+    stop moves to 1R.
+12. If a candle reaches both the stop and a target, the stop is assumed to come first.
 """
 
 from __future__ import annotations
@@ -69,18 +74,24 @@ class ZoneRules:
     max_trades: int = 3
     max_trades_thursday: int = 1
     rest_after_first_win: bool = True
+    opposite_target: bool = True
+    opposite_min_r: float = 1.0
+    opposite_max_r: float = 3.0
+    opposite_lookback: int = 192  # candles: two days
 
     def __post_init__(self) -> None:
         if not 0 <= self.session_start < self.session_end <= 24:
             raise ValueError("session_start and session_end must satisfy 0 <= start < end <= 24")
-        for name in ("body_tolerance", "entry_offset", "min_room"):
+        for name in ("body_tolerance", "entry_offset", "min_room", "opposite_min_r"):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must be >= 0")
         if self.max_stop <= 0:
             raise ValueError("max_stop must be > 0")
-        for name in ("zone_min_age", "max_trades", "max_trades_thursday"):
+        for name in ("zone_min_age", "max_trades", "max_trades_thursday", "opposite_lookback"):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must be >= 0")
+        if self.opposite_max_r < self.opposite_min_r:
+            raise ValueError("opposite_max_r must be >= opposite_min_r")
 
 
 @dataclass(frozen=True)
@@ -106,9 +117,11 @@ class ZoneTrade:
     risk: float  # entry to stop in price points: 1R
     exit_time: pd.Timestamp
     result_r: float
-    # "win" (3R), "trailed" (2R then back to 1R), "partial" (1R then the stop),
-    # "loss", or "open" when the data ends first (marked at the last close)
+    # "target" (closed at the opposite pattern), "win" (3R), "trailed" (2R then back
+    # to 1R), "partial" (1R then the stop), "loss", or "open" when the data ends first
+    # (marked at the last close)
     outcome: str
+    target: float | None = None  # the opposite pattern's level, when the trade aimed for it
 
 
 def stop_buffer(points: float) -> float:
@@ -173,8 +186,20 @@ def zone_trades(
         )
         return not ahead or min(ahead) >= rules.min_room * risk
 
+    def opposite(j: int, side: int, entry: float) -> float | None:
+        """The most recent opposite pattern beyond the entry, ending before candle j - 1."""
+        for i, s, level in reversed(seen):
+            if i >= j - 1:
+                continue
+            if i < j - rules.opposite_lookback:
+                break
+            if s == -side and ((level > entry) if side > 0 else (level < entry)):
+                return level
+        return None
+
     trades: list[ZoneTrade] = []
     setups: list[Setup] = []
+    seen: list[tuple[int, int, float]] = []  # patterns so far: (2nd candle, side, far point)
     busy_until, count, resting = -1, {}, set()
     next_break, last_side, opened, opened_day = 0, 0, set(), None
     for j in range(1, len(data) - 1):
@@ -191,6 +216,8 @@ def zone_trades(
         if found is None:
             continue
         name, side = found
+        # A bullish pattern's highest point and a bearish one's lowest are targets later on.
+        seen.append((j, side, max(h[j - 1], h[j]) if side > 0 else min(low[j - 1], low[j])))
         if side > 0:
             entry, extreme = h[j] + rules.entry_offset, min(low[j - 1], low[j])
             stop = extreme - stop_buffer(entry - extreme)
@@ -218,7 +245,17 @@ def zone_trades(
             status = "not filled"
         else:
             status = "traded"
-            exit_i, result, outcome = _manage(h, low, c, j + 1, side, entry, risk, stop)
+            target = opposite(j, side, entry) if rules.opposite_target else None
+            if target is not None and not (
+                rules.opposite_min_r <= abs(target - entry) / risk < rules.opposite_max_r
+            ):
+                target = None
+            if target is None:
+                exit_i, result, outcome = _manage(h, low, c, j + 1, side, entry, risk, stop)
+            else:
+                exit_i, result, outcome = _manage_to(
+                    h, low, c, j + 1, side, entry, risk, stop, target
+                )
             trades.append(
                 ZoneTrade(
                     side="buy" if side > 0 else "sell",
@@ -231,6 +268,7 @@ def zone_trades(
                     exit_time=times[exit_i],
                     result_r=float(result),
                     outcome=outcome,
+                    target=None if target is None else float(target),
                 )
             )
             busy_until = exit_i
@@ -263,6 +301,17 @@ def _manage(h, low, c, fill, side, entry, risk, stop) -> tuple[int, float, str]:
             return k, result, "win"
     last = len(h) - 1
     return last, result + (1 - hit * share) * side * (c[last] - entry) / risk, "open"
+
+
+def _manage_to(h, low, c, fill, side, entry, risk, stop, target) -> tuple[int, float, str]:
+    """The whole position aims for ``target``; the stop does not move."""
+    for k in range(fill, len(h)):
+        if (low[k] <= stop) if side > 0 else (h[k] >= stop):
+            return k, -1.0, "loss"
+        if (h[k] >= target) if side > 0 else (low[k] <= target):
+            return k, abs(target - entry) / risk, "target"
+    last = len(h) - 1
+    return last, side * (c[last] - entry) / risk, "open"
 
 
 def trades_frame(trades: list[ZoneTrade]) -> pd.DataFrame:

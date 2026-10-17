@@ -145,7 +145,9 @@ the top of `manoj_bot/zone_trades.py`. Times are India time.
   or at least 2.5R away.
 - **Filters:** 06:00-22:00 only, stop at most 15 points, one trade at a time, at most 3
   trades a day and 1 on Thursday. After a winning first trade the bot stops for the day.
-- **Exit:** a third at 1R, 2R and 3R; after 2R the stop moves to 1R.
+- **Exit:** price tends to run to the last opposite pattern (for a buy, the most recent
+  bearish pattern above the entry). When it is 1-3R away the whole trade closes there.
+  Otherwise a third closes at 1R, 2R and 3R, and after 2R the stop moves to 1R.
 
 ```bash
 manoj-bot zone-trades --csv data/XAUUSD_15m.csv --start 2026-06-01
@@ -157,10 +159,17 @@ manoj-bot zone-trades --csv data/XAUUSD_15m.csv -p max_trades_thursday=3 --setup
 not traded. Start a few days before the period you care about, so the first zones and
 breaks already exist.
 
-On spot gold from Jun 1 to Oct 16 2026 this gave 166 trades, a 43% win rate and +45.3R
-in total. The worst drop was 12.3R, and every month was positive. The rules were tuned
-on those same months, so test them on other dates before trusting them. The command
-only backtests for now; paper and live trading do not use these rules yet.
+Results on spot gold:
+
+| Period | Trades | Win rate | Net | Worst drop |
+|---|---|---|---|---|
+| Jun 1 - Oct 16 2026 | 166 | 43% | +46.3R | 12.5R |
+| Jan - May 2026 | 147 | 39% | +22.7R | 9.9R |
+
+Every month was positive in both periods. Most rules were tuned on Jun - Oct, and
+Jan - May was kept back to check them; the opposite-pattern exit was then chosen after
+looking at both periods. Expect less on new data. The command only backtests for now;
+paper and live trading do not use these rules yet.
 
 ### 2. Paper trade
 
