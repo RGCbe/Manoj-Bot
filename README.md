@@ -182,7 +182,8 @@ Results on spot gold:
 | Jun 1 - Oct 16 2026 | 166 | 43% | +46.3R | 12.5R |
 | Jan - May 2026 | 147 | 39% | +22.7R | 9.9R |
 
-Every month was positive in both periods. Most rules were tuned on Jun - Oct, and
+Every month was positive in both periods. Every trade, with a monthly account table, is in
+[`backtests/gold_15m/`](backtests/gold_15m/). Most rules were tuned on Jun - Oct, and
 Jan - May was kept back to check them; the opposite-pattern exit was then chosen after
 looking at both periods. Expect less on new data. The command only backtests for now;
 paper and live trading do not use these rules yet.
