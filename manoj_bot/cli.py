@@ -1,4 +1,7 @@
-"""Command line interface: ``manoj-bot backtest | run | status | strategies | download | zones``."""
+"""Command line interface.
+
+``manoj-bot backtest | run | status | strategies | download | zones | zone-trades``
+"""
 
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ from manoj_bot.data import build_feed
 from manoj_bot.engine import TradingBot, load_state
 from manoj_bot.strategies import STRATEGIES, build_strategy
 from manoj_bot.timeframes import parse_timeframe
+from manoj_bot.zone_trades import ZoneRules, setups_frame, summarize, trades_frame, zone_trades
 from manoj_bot.zones import find_zones, zones_frame
 
 log = logging.getLogger("manoj_bot")
@@ -104,18 +108,40 @@ def _parser() -> argparse.ArgumentParser:
     download.set_defaults(handler=_download)
 
     zones = commands.add_parser("zones", help="list the weak zones (support / resistance)")
-    zones.add_argument("--source", choices=DATA_SOURCES, default="dukascopy", help="data source")
-    zones.add_argument("--csv", metavar="PATH", help="read bars from a CSV file")
-    zones.add_argument("--symbol", default="XAUUSD", help="e.g. XAUUSD, BTC/USDT")
-    zones.add_argument("--timeframe", default="15m", help="bar size, e.g. 15m")
-    zones.add_argument("--exchange", default="binance", help="ccxt exchange id")
-    zones.add_argument("--start", help="first date, e.g. 2026-10-15")
-    zones.add_argument("--end", help="last date (inclusive)")
-    zones.add_argument("--bars", type=int, help="number of most recent bars, if no --start")
+    _add_bar_arguments(zones)
     zones.add_argument("--tz", default="UTC", help="time zone to print, e.g. Asia/Kolkata")
     zones.add_argument("-o", "--out", metavar="CSV", help="also write the zones to a CSV")
     zones.set_defaults(handler=_zones)
+
+    trades = commands.add_parser(
+        "zone-trades", help="backtest the weak-zone entry rules (results in R)"
+    )
+    _add_bar_arguments(trades)
+    trades.add_argument(
+        "-p",
+        "--param",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="change a rule, e.g. -p max_stop=20 -p max_trades_thursday=3 (repeatable)",
+    )
+    trades.add_argument("-o", "--out", metavar="CSV", help="also write the trades to a CSV")
+    trades.add_argument(
+        "--setups-out", metavar="CSV", help="write every setup and why it was or was not traded"
+    )
+    trades.set_defaults(handler=_zone_trades)
     return parser
+
+
+def _add_bar_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--source", choices=DATA_SOURCES, default="dukascopy", help="data source")
+    parser.add_argument("--csv", metavar="PATH", help="read bars from a CSV file")
+    parser.add_argument("--symbol", default="XAUUSD", help="e.g. XAUUSD, BTC/USDT")
+    parser.add_argument("--timeframe", default="15m", help="bar size, e.g. 15m")
+    parser.add_argument("--exchange", default="binance", help="ccxt exchange id")
+    parser.add_argument("--start", help="first date, e.g. 2026-10-15")
+    parser.add_argument("--end", help="last date (inclusive)")
+    parser.add_argument("--bars", type=int, help="number of most recent bars, if no --start")
 
 
 def _backtest(args: argparse.Namespace) -> int:
@@ -266,7 +292,7 @@ def _download(args: argparse.Namespace) -> int:
     return 0
 
 
-def _zones(args: argparse.Namespace) -> int:
+def _load_bars(args: argparse.Namespace):
     parse_timeframe(args.timeframe)
     source = "csv" if args.csv else args.source
     feed = build_feed(DataConfig(source=source, exchange=args.exchange, path=args.csv))
@@ -274,7 +300,11 @@ def _zones(args: argparse.Namespace) -> int:
     data = feed.history(args.symbol, args.timeframe, start=args.start, end=args.end, limit=limit)
     if data.empty:
         raise ValueError(f"No {args.timeframe} data for {args.symbol} from {source}")
-    zones = find_zones(data)
+    return data
+
+
+def _zones(args: argparse.Namespace) -> int:
+    zones = find_zones(_load_bars(args))
     print(f"{len(zones)} weak zones in {args.symbol} {args.timeframe}, times in {args.tz}")
     for zone in zones:
         start = zone.start.tz_convert(args.tz)
@@ -293,6 +323,48 @@ def _zones(args: argparse.Namespace) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         zones_frame(zones).to_csv(out, index=False)
         print(f"Zones written to {out}")
+    return 0
+
+
+def _zone_trades(args: argparse.Namespace) -> int:
+    params = _parse_params(args.param)
+    allowed = {f.name for f in dataclasses.fields(ZoneRules)}
+    unknown = sorted(set(params) - allowed)
+    if unknown:
+        raise ValueError(
+            f"Unknown rule(s): {', '.join(unknown)}. Allowed: {', '.join(sorted(allowed))}"
+        )
+    rules = ZoneRules(**params)
+    trades, setups = zone_trades(_load_bars(args), rules)
+    print(f"{len(trades)} weak-zone trades in {args.symbol} {args.timeframe}, times in {rules.tz}")
+    for trade in trades:
+        signal = trade.signal_time.tz_convert(rules.tz)
+        exit_ = trade.exit_time.tz_convert(rules.tz)
+        print(
+            f"  {signal:%a %d %b %H:%M}  {trade.side.upper():<4}  {trade.pattern:<17}  "
+            f"entry {trade.entry:,.2f}  stop {trade.stop:,.2f}  1R {trade.risk:.2f}  "
+            f"{trade.outcome:<7} {trade.result_r:+.2f}R  exit {exit_:%a %d %b %H:%M}"
+        )
+    totals = summarize(trades)
+    print(
+        f"Trades {totals['trades']}, win rate {totals['win_rate']:.0%}, "
+        f"net {totals['net_r']:+.1f}R, worst drop {totals['max_drawdown_r']:.1f}R, "
+        f"longest losing run {totals['longest_losing_run']}"
+    )
+    if trades:
+        frame = trades_frame(trades)
+        month = frame.signal_time.dt.tz_convert(rules.tz).dt.strftime("%Y-%m")
+        by_month = frame.groupby(month, sort=True).result_r.sum()
+        print("By month: " + ", ".join(f"{m} {r:+.1f}R" for m, r in by_month.items()))
+    for path, frame, what in (
+        (args.out, trades_frame(trades), "Trades"),
+        (args.setups_out, setups_frame(setups), "Setups"),
+    ):
+        if path:
+            out = Path(path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            frame.to_csv(out, index=False)
+            print(f"{what} written to {out}")
     return 0
 
 

@@ -130,6 +130,38 @@ manoj-bot zones --csv data/XAUUSD_15m.csv --start 2026-10-15 --tz Asia/Kolkata
 manoj-bot zones --source dukascopy --symbol XAUUSD --start 2026-10-15 -o zones.csv
 ```
 
+### Weak-zone trades (the mentor's entry rules)
+
+`manoj-bot zone-trades` replays the mentor's trading rules on top of the weak zones and
+reports every trade in R (1R = the distance from entry to stop). The full rules are at
+the top of `manoj_bot/zone_trades.py`. Times are India time.
+
+- **Direction:** from 06:00, the first resistance that breaks opens buys and the first
+  support that breaks opens sells. Before any break that day, the last break carries over.
+- **Entry:** a bullish or bearish engulfing or harami. Buy stop 0.3 above the 2nd candle
+  (sell stop 0.3 below), filled only by the next candle. The stop-loss goes beyond the two
+  candles plus a buffer.
+- **Room:** the zone in the way (resistance for a buy, support for a sell) must be broken
+  or at least 2.5R away.
+- **Filters:** 06:00-22:00 only, stop at most 15 points, one trade at a time, at most 3
+  trades a day and 1 on Thursday. After a winning first trade the bot stops for the day.
+- **Exit:** a third at 1R, 2R and 3R; after 2R the stop moves to 1R.
+
+```bash
+manoj-bot zone-trades --csv data/XAUUSD_15m.csv --start 2026-06-01
+manoj-bot zone-trades --source dukascopy --start 2026-10-01 -o trades.csv
+manoj-bot zone-trades --csv data/XAUUSD_15m.csv -p max_trades_thursday=3 --setups-out setups.csv
+```
+
+`-p` changes any rule. `--setups-out` lists every pattern with the reason it was or was
+not traded. Start a few days before the period you care about, so the first zones and
+breaks already exist.
+
+On spot gold from Jun 1 to Oct 16 2026 this gave 166 trades, a 43% win rate and +45.3R
+in total. The worst drop was 12.3R, and every month was positive. The rules were tuned
+on those same months, so test them on other dates before trusting them. The command
+only backtests for now; paper and live trading do not use these rules yet.
+
 ### 2. Paper trade
 
 ```bash
@@ -257,7 +289,8 @@ Then add it to the `STRATEGIES` registry in `manoj_bot/strategies/__init__.py`. 
 
 ```
 manoj_bot/
-  cli.py            command line (backtest, run, status, strategies, download, zones)
+  cli.py            command line (backtest, run, status, strategies, download, zones,
+                    zone-trades)
   config.py         YAML config and validation
   backtest.py       bar-by-bar backtester
   engine.py         paper/live trading loop and state file
@@ -266,6 +299,7 @@ manoj_bot/
   portfolio.py      cash/position ledger, fills and trades
   indicators.py     SMA, EMA, RSI
   zones.py          weak zones (support / resistance)
+  zone_trades.py    the mentor's entry and exit rules on the weak zones
   strategies/       ma_crossover, rsi_reversion
   data/             yahoo, ccxt, csv and synthetic feeds
   brokers/          paper and ccxt brokers
