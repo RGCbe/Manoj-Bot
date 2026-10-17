@@ -4,8 +4,9 @@ One lot is ``contract_size`` ounces (100 for XAUUSD), so a one-point move is wor
 ``contract_size`` in the account currency per lot. The account is assumed to be in the
 quote currency (USD for XAUUSD).
 
-Each trade risks ``risk`` of the balance at the time: lots = balance x risk / (stop
-distance x contract size), rounded down to ``lot_step`` so the real risk never exceeds it.
+Each trade risks ``risk`` of the balance at the time, so lots grow with the account
+(compounding, 3% by default): lots = balance x risk / (stop distance x contract size),
+rounded down to ``lot_step`` so the real risk never exceeds it.
 When even ``min_lot`` would risk more, the trade is skipped.
 
 A trade that scales out in thirds is split into three parts in whole lot steps, the
@@ -30,7 +31,7 @@ LEG_R = {
 
 @dataclass(frozen=True)
 class LotRules:
-    risk: float = 0.01  # share of the balance lost if the stop is hit (0.02 = 2%)
+    risk: float = 0.03  # share of the balance lost if the stop is hit (0.03 = 3%)
     contract_size: float = 100.0  # ounces per lot
     min_lot: float = 0.01
     lot_step: float = 0.01

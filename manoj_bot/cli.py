@@ -136,8 +136,8 @@ def _parser() -> argparse.ArgumentParser:
     trades.add_argument(
         "--risk",
         type=float,
-        default=0.01,
-        help="share of the balance risked per trade (0.02 = 2%%)",
+        default=0.03,
+        help="share of the balance risked per trade, compounding (default 0.03 = 3%%)",
     )
     trades.add_argument("--contract-size", type=float, default=100.0, help="ounces per lot")
     trades.add_argument(

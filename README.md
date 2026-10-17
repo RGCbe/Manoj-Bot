@@ -163,10 +163,12 @@ breaks already exist.
 the lots, the money result of each trade and the balance by month:
 
 ```bash
+manoj-bot zone-trades --csv data/XAUUSD_15m.csv --start 2026-06-01 --balance 1000
 manoj-bot zone-trades --csv data/XAUUSD_15m.csv --start 2026-06-01 --balance 1000 --risk 0.02
 ```
 
-- Each trade risks `--risk` of the balance at the time (0.02 = 2%). Lots = balance x risk /
+- Each trade risks `--risk` of the balance at the time, so the lots grow with the account
+  (compounding). The default is 3%; `--risk 0.02` is 2%. Lots = balance x risk /
   (stop distance x 100 oz), rounded down to 0.01 lot so the real risk never goes above it.
 - If even 0.01 lot would risk more, the trade is skipped, so a small account stays safe.
 - The thirds are split in whole 0.01 lots: 0.02 lot closes 0.01 at 1R and 0.01 at 2R.
